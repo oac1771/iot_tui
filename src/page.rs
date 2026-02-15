@@ -1,6 +1,10 @@
-use std::io;
+use std::{
+    io,
+    sync::mpsc::{self, Sender},
+    thread,
+};
 
-use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind};
+use crossterm::event::{KeyCode, KeyEventKind};
 use ratatui::{
     DefaultTerminal, Frame,
     buffer::Buffer,
@@ -15,18 +19,35 @@ pub struct Page {
     exit: bool,
 }
 
-impl Page {
+enum Event {
+    UserInput(crossterm::event::KeyEvent),
+}
 
+impl Page {
     pub fn new() -> Self {
-        Self {
-            exit: false
-        }
+        Self { exit: false }
     }
 
     pub fn run(&mut self, terminal: &mut DefaultTerminal) -> io::Result<()> {
+        let (events_tx, events_rx) = mpsc::channel::<Event>();
+
+        thread::spawn(move || {
+            handle_input_events(events_tx).unwrap();
+        });
+
         while !self.exit {
             terminal.draw(|frame| self.draw(frame))?;
-            self.handle_events()?;
+            match events_rx.recv().unwrap() {
+                Event::UserInput(key_event) => self.handle_key_event(key_event)?,
+            }
+        }
+
+        Ok(())
+    }
+
+    fn handle_key_event(&mut self, key_event: crossterm::event::KeyEvent) -> io::Result<()> {
+        if key_event.kind == KeyEventKind::Press && key_event.code == KeyCode::Char('q') {
+            self.exit = true;
         }
 
         Ok(())
@@ -35,36 +56,12 @@ impl Page {
     fn draw(&self, frame: &mut Frame) {
         frame.render_widget(self, frame.area());
     }
-    
-    fn handle_events(&mut self) -> io::Result<()> {
-        match event::read()? {
-            Event::Key(key_event) if key_event.kind == KeyEventKind::Press => {
-                self.handle_key_event(key_event)
-            }
-            _ => {}
-        };
-        Ok(())
-    }
-
-    fn handle_key_event(&mut self, key_event: KeyEvent) {
-        match key_event.code {
-            KeyCode::Char('q') => self.exit = true,
-            _ => {}
-        }
-    }
 }
 
 impl Widget for &Page {
     fn render(self, area: Rect, buf: &mut Buffer) {
         let title = Line::from(" Counter App Tutorial ".bold());
-        let instructions = Line::from(vec![
-            " Decrement ".into(),
-            "<Left>".blue().bold(),
-            " Increment ".into(),
-            "<Right>".blue().bold(),
-            " Quit ".into(),
-            "<Q> ".blue().bold(),
-        ]);
+        let instructions = Line::from(vec![" Quit ".into(), "<Q> ".blue().bold()]);
         let block = Block::bordered()
             .title(title.centered())
             .title_bottom(instructions.centered())
@@ -76,5 +73,16 @@ impl Widget for &Page {
             .centered()
             .block(block)
             .render(area, buf);
+    }
+}
+
+fn handle_input_events(events_tx: Sender<Event>) -> io::Result<()> {
+    loop {
+        match crossterm::event::read().unwrap() {
+            crossterm::event::Event::Key(key_event) => {
+                events_tx.send(Event::UserInput(key_event)).unwrap()
+            }
+            _ => {}
+        }
     }
 }
