@@ -8,11 +8,11 @@ use crossterm::event::{KeyCode, KeyEventKind};
 use ratatui::{
     DefaultTerminal, Frame,
     buffer::Buffer,
-    layout::Rect,
+    layout::{Constraint, Direction, Layout, Rect},
     style::Stylize,
     symbols::border,
-    text::{Line, Text},
-    widgets::{Block, Paragraph, Widget},
+    text::Line,
+    widgets::{Block, Widget},
 };
 
 pub struct Page {
@@ -60,19 +60,21 @@ impl Page {
 
 impl Widget for &Page {
     fn render(self, area: Rect, buf: &mut Buffer) {
-        let title = Line::from(" Counter App Tutorial ".bold());
-        let instructions = Line::from(vec![" Quit ".into(), "<Q> ".blue().bold()]);
-        let block = Block::bordered()
-            .title(title.centered())
-            .title_bottom(instructions.centered())
-            .border_set(border::THICK);
+        let layout = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints(vec![Constraint::Percentage(25), Constraint::Percentage(75)]);
+        let [title_area, gauge_area] = layout.areas(area);
 
-        let counter_text = Text::from(vec![Line::from(vec!["Value: 0".into()])]);
+        let _block = Block::bordered()
+            .title(Line::from("  Foo overview  ").bold().centered())
+            .border_set(border::THICK)
+            .render(title_area, buf);
 
-        Paragraph::new(counter_text)
-            .centered()
-            .block(block)
-            .render(area, buf);
+        let _block = Block::bordered()
+            .title(Line::from("  Bar overview  ").bold().centered())
+            .border_set(border::THICK)
+            .render(gauge_area, buf);
+
     }
 }
 
