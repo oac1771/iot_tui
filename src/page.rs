@@ -31,7 +31,11 @@ impl Page {
 
         let (events_tx, events_rx) = mpsc::channel::<Event>();
         thread::spawn(move || {
-            handle_input_events(events_tx).unwrap();
+            loop {
+                if let Err(err) = handle_input_events(&events_tx) {
+                    println!("Input Error: {:?}", err);
+                }
+            }
         });
 
         while !state_client.read_exit() {
@@ -74,7 +78,14 @@ impl StatefulWidget for &Page {
             .constraints(vec![Constraint::Percentage(25), Constraint::Percentage(75)]);
         let [title_area, data_area] = layout.areas(area);
 
-        let instructions = Line::from(vec![" Quit ".into(), "<Q> ".blue().bold()]);
+        let instructions = Line::from(vec![
+            " Down ".into(),
+            "<Down>".blue().bold(),
+            " Up ".into(),
+            "<Up>".blue().bold(),
+            " Quit ".into(),
+            "<Q> ".blue().bold(),
+        ]);
 
         let _title_block = Block::bordered()
             .title(Line::from("  Foo overview  ").bold().centered())
@@ -109,13 +120,18 @@ impl StatefulWidget for &Page {
     }
 }
 
-fn handle_input_events(events_tx: Sender<Event>) -> io::Result<()> {
-    loop {
-        match event::read().unwrap() {
-            CrosstermEvent::Key(key_event) => events_tx.send(Event::UserInput(key_event)).unwrap(),
-            _ => {}
+fn handle_input_events(events_tx: &Sender<Event>) -> Result<(), String> {
+    match event::read() {
+        Ok(CrosstermEvent::Key(key_event)) => {
+            if let Err(err) = events_tx.send(Event::UserInput(key_event)) {
+                return Err(err.to_string());
+            }
         }
-    }
+        Err(err) => return Err(err.to_string()),
+        _ => {}
+    };
+
+    Ok(())
 }
 
 #[derive(Default)]
@@ -137,28 +153,34 @@ enum StateActions {
 
 impl State {
     fn init() -> StateClient {
-        let state = State {
+        let mut state = State {
             exit: false,
             list_item_index: 0,
         };
         let (state_update_tx, state_update_rx) = mpsc::channel::<StateActions>();
 
         thread::spawn(move || {
-            Self::handle_state_updates(state_update_rx, state).unwrap();
+            loop {
+                if let Err(err) = Self::handle_state_updates(&state_update_rx, &mut state) {
+                    println!("Err: {:?}", err);
+                }
+            }
         });
 
         StateClient::new(state_update_tx)
     }
 
     fn handle_state_updates(
-        state_update_rx: Receiver<StateActions>,
-        mut state: State,
-    ) -> io::Result<()> {
+        state_update_rx: &Receiver<StateActions>,
+        state: &mut State,
+    ) -> Result<(), String> {
         while let Ok(action) = state_update_rx.recv() {
             match action {
                 StateActions::UpdateExit(v) => state.exit = v,
                 StateActions::ReadExit(sender) => {
-                    sender.send(state.exit).unwrap();
+                    if let Err(err) = sender.send(state.exit) {
+                        return Err(err.to_string());
+                    }
                 }
                 StateActions::UpdateListItemIndex(update) => {
                     let len = 3;
@@ -168,7 +190,9 @@ impl State {
                     state.list_item_index = list_item_index;
                 }
                 StateActions::ReadListItemIndex(sender) => {
-                    sender.send(state.list_item_index).unwrap();
+                    if let Err(err) = sender.send(state.list_item_index) {
+                        return Err(err.to_string());
+                    }
                 }
             }
         }
