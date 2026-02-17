@@ -27,7 +27,7 @@ impl Page {
     }
 
     pub fn run(&mut self, terminal: &mut DefaultTerminal) -> io::Result<()> {
-        let state_client = State::init();
+        let mut state_client = State::init();
 
         let (events_tx, events_rx) = mpsc::channel::<Event>();
         thread::spawn(move || {
@@ -35,7 +35,7 @@ impl Page {
         });
 
         while !state_client.read_exit() {
-            terminal.draw(|frame| self.draw(frame))?;
+            terminal.draw(|frame| self.draw(frame, &mut state_client))?;
             match events_rx.recv().unwrap() {
                 Event::UserInput(key_event) => self.handle_key_event(key_event, &state_client)?,
             }
@@ -51,23 +51,24 @@ impl Page {
     ) -> io::Result<()> {
         if key_event.kind == KeyEventKind::Press && key_event.code == KeyCode::Char('q') {
             state_client.update_exit(true);
+        } else if key_event.kind == KeyEventKind::Press && key_event.code == KeyCode::Up {
+            state_client.update_list_item_index(KeyCode::Up).unwrap();
+        } else if key_event.kind == KeyEventKind::Press && key_event.code == KeyCode::Down {
+            state_client.update_list_item_index(KeyCode::Down).unwrap();
         }
-        // } else if key_event.kind == KeyEventKind::Press && key_event.code == KeyCode::Up {
-
-        // } else if key_event.kind == KeyEventKind::Press && key_event.code == KeyCode::Down {
-
-        // }
 
         Ok(())
     }
 
-    fn draw(&self, frame: &mut Frame) {
-        frame.render_widget(self, frame.area());
+    fn draw(&self, frame: &mut Frame, state_client: &mut StateClient) {
+        frame.render_stateful_widget(self, frame.area(), state_client);
     }
 }
 
-impl Widget for &Page {
-    fn render(self, area: Rect, buf: &mut Buffer) {
+impl StatefulWidget for &Page {
+    type State = StateClient;
+
+    fn render(self, area: Rect, buf: &mut Buffer, state: &mut Self::State) {
         let layout = Layout::default()
             .direction(Direction::Vertical)
             .constraints(vec![Constraint::Percentage(25), Constraint::Percentage(75)]);
@@ -91,8 +92,9 @@ impl Widget for &Page {
             .map(|s| ListItem::new(Line::from(*s).alignment(Alignment::Center)))
             .collect();
 
+        let index = state.read_list_item_index();
         let mut state = ListState::default();
-        state.select(Some(0)); // select first item
+        state.select(Some(index)); // select first item
 
         let _list = StatefulWidget::render(
             List::new(list_items)
@@ -119,20 +121,26 @@ fn handle_input_events(events_tx: Sender<Event>) -> io::Result<()> {
 #[derive(Default)]
 struct State {
     exit: bool,
+    list_item_index: usize,
 }
 
-struct StateClient {
+pub struct StateClient {
     state_update_tx: Sender<StateActions>,
 }
 
 enum StateActions {
     UpdateExit(bool),
     ReadExit(SyncSender<bool>),
+    UpdateListItemIndex(i8),
+    ReadListItemIndex(SyncSender<usize>),
 }
 
 impl State {
     fn init() -> StateClient {
-        let state = State { exit: false };
+        let state = State {
+            exit: false,
+            list_item_index: 0,
+        };
         let (state_update_tx, state_update_rx) = mpsc::channel::<StateActions>();
 
         thread::spawn(move || {
@@ -150,7 +158,17 @@ impl State {
             match action {
                 StateActions::UpdateExit(v) => state.exit = v,
                 StateActions::ReadExit(sender) => {
-                    let _ = sender.send(state.exit);
+                    sender.send(state.exit).unwrap();
+                }
+                StateActions::UpdateListItemIndex(update) => {
+                    let len = 3;
+                    let list_item_index = ((state.list_item_index as isize + update as isize)
+                        .rem_euclid(len as isize))
+                        as usize;
+                    state.list_item_index = list_item_index;
+                }
+                StateActions::ReadListItemIndex(sender) => {
+                    sender.send(state.list_item_index).unwrap();
                 }
             }
         }
@@ -170,6 +188,19 @@ impl StateClient {
             .unwrap();
     }
 
+    fn update_list_item_index(&self, code: KeyCode) -> Result<(), String> {
+        let update = match code {
+            KeyCode::Up => -1,
+            KeyCode::Down => 1,
+            _ => return Err(String::from("Foo")),
+        };
+        self.state_update_tx
+            .send(StateActions::UpdateListItemIndex(update))
+            .unwrap();
+
+        Ok(())
+    }
+
     fn read_exit(&self) -> bool {
         let (sender, receiver) = sync_channel(1);
         self.state_update_tx
@@ -177,5 +208,14 @@ impl StateClient {
             .unwrap();
         let exit = receiver.recv().unwrap();
         exit
+    }
+
+    fn read_list_item_index(&self) -> usize {
+        let (sender, receiver) = sync_channel(1);
+        self.state_update_tx
+            .send(StateActions::ReadListItemIndex(sender))
+            .unwrap();
+        let index = receiver.recv().unwrap();
+        index
     }
 }
