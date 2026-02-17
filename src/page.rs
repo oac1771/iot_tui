@@ -1,10 +1,10 @@
 use std::{
     io,
-    sync::mpsc::{self, Sender},
+    sync::mpsc::{self, Receiver, Sender, SyncSender, sync_channel},
     thread,
 };
 
-use crossterm::event::{KeyCode, KeyEventKind};
+use crossterm::event::{self, Event as CrosstermEvent, KeyCode, KeyEvent, KeyEventKind};
 use ratatui::{
     DefaultTerminal, Frame,
     buffer::Buffer,
@@ -15,40 +15,48 @@ use ratatui::{
     widgets::{Block, List, ListItem, ListState, StatefulWidget, Widget},
 };
 
-pub struct Page {
-    exit: bool,
-}
+pub struct Page;
 
 enum Event {
-    UserInput(crossterm::event::KeyEvent),
+    UserInput(KeyEvent),
 }
 
 impl Page {
     pub fn new() -> Self {
-        Self { exit: false }
+        Self
     }
 
     pub fn run(&mut self, terminal: &mut DefaultTerminal) -> io::Result<()> {
-        let (events_tx, events_rx) = mpsc::channel::<Event>();
+        let state_client = State::init();
 
+        let (events_tx, events_rx) = mpsc::channel::<Event>();
         thread::spawn(move || {
             handle_input_events(events_tx).unwrap();
         });
 
-        while !self.exit {
+        while !state_client.read_exit() {
             terminal.draw(|frame| self.draw(frame))?;
             match events_rx.recv().unwrap() {
-                Event::UserInput(key_event) => self.handle_key_event(key_event)?,
+                Event::UserInput(key_event) => self.handle_key_event(key_event, &state_client)?,
             }
         }
 
         Ok(())
     }
 
-    fn handle_key_event(&mut self, key_event: crossterm::event::KeyEvent) -> io::Result<()> {
+    fn handle_key_event(
+        &mut self,
+        key_event: KeyEvent,
+        state_client: &StateClient,
+    ) -> io::Result<()> {
         if key_event.kind == KeyEventKind::Press && key_event.code == KeyCode::Char('q') {
-            self.exit = true;
+            state_client.update_exit(true);
         }
+        // } else if key_event.kind == KeyEventKind::Press && key_event.code == KeyCode::Up {
+
+        // } else if key_event.kind == KeyEventKind::Press && key_event.code == KeyCode::Down {
+
+        // }
 
         Ok(())
     }
@@ -96,18 +104,78 @@ impl Widget for &Page {
             buf,
             &mut state,
         );
-
-        // split data block into two
     }
 }
 
 fn handle_input_events(events_tx: Sender<Event>) -> io::Result<()> {
     loop {
-        match crossterm::event::read().unwrap() {
-            crossterm::event::Event::Key(key_event) => {
-                events_tx.send(Event::UserInput(key_event)).unwrap()
-            }
+        match event::read().unwrap() {
+            CrosstermEvent::Key(key_event) => events_tx.send(Event::UserInput(key_event)).unwrap(),
             _ => {}
         }
+    }
+}
+
+#[derive(Default)]
+struct State {
+    exit: bool,
+}
+
+struct StateClient {
+    state_update_tx: Sender<StateActions>,
+}
+
+enum StateActions {
+    UpdateExit(bool),
+    ReadExit(SyncSender<bool>),
+}
+
+impl State {
+    fn init() -> StateClient {
+        let state = State { exit: false };
+        let (state_update_tx, state_update_rx) = mpsc::channel::<StateActions>();
+
+        thread::spawn(move || {
+            Self::handle_state_updates(state_update_rx, state).unwrap();
+        });
+
+        StateClient::new(state_update_tx)
+    }
+
+    fn handle_state_updates(
+        state_update_rx: Receiver<StateActions>,
+        mut state: State,
+    ) -> io::Result<()> {
+        while let Ok(action) = state_update_rx.recv() {
+            match action {
+                StateActions::UpdateExit(v) => state.exit = v,
+                StateActions::ReadExit(sender) => {
+                    let _ = sender.send(state.exit);
+                }
+            }
+        }
+
+        Ok(())
+    }
+}
+
+impl StateClient {
+    fn new(state_update_tx: Sender<StateActions>) -> Self {
+        Self { state_update_tx }
+    }
+
+    fn update_exit(&self, exit: bool) {
+        self.state_update_tx
+            .send(StateActions::UpdateExit(exit))
+            .unwrap();
+    }
+
+    fn read_exit(&self) -> bool {
+        let (sender, receiver) = sync_channel(1);
+        self.state_update_tx
+            .send(StateActions::ReadExit(sender))
+            .unwrap();
+        let exit = receiver.recv().unwrap();
+        exit
     }
 }
