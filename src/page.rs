@@ -8,11 +8,11 @@ use crossterm::event::{KeyCode, KeyEventKind};
 use ratatui::{
     DefaultTerminal, Frame,
     buffer::Buffer,
-    layout::{Constraint, Direction, Layout, Rect},
-    style::Stylize,
+    layout::{Alignment, Constraint, Direction, Layout, Rect},
+    style::{Style, Stylize},
     symbols::border,
     text::Line,
-    widgets::{Block, Widget},
+    widgets::{Block, List, ListItem, ListState, StatefulWidget, Widget},
 };
 
 pub struct Page {
@@ -63,18 +63,41 @@ impl Widget for &Page {
         let layout = Layout::default()
             .direction(Direction::Vertical)
             .constraints(vec![Constraint::Percentage(25), Constraint::Percentage(75)]);
-        let [title_area, gauge_area] = layout.areas(area);
+        let [title_area, data_area] = layout.areas(area);
 
-        let _block = Block::bordered()
+        let instructions = Line::from(vec![" Quit ".into(), "<Q> ".blue().bold()]);
+
+        let _title_block = Block::bordered()
             .title(Line::from("  Foo overview  ").bold().centered())
-            .border_set(border::THICK)
+            .border_set(border::DOUBLE)
+            .title_bottom(instructions.centered())
             .render(title_area, buf);
 
-        let _block = Block::bordered()
-            .title(Line::from("  Bar overview  ").bold().centered())
-            .border_set(border::THICK)
-            .render(gauge_area, buf);
+        let data_block = Block::bordered()
+            .title(Line::from("  Data overview  ").bold().centered())
+            .border_set(border::DOUBLE);
 
+        let items = ["Item 1", "Item 2", "Item 3"];
+        let list_items: Vec<ListItem> = items
+            .iter()
+            .map(|s| ListItem::new(Line::from(*s).alignment(Alignment::Center)))
+            .collect();
+
+        let mut state = ListState::default();
+        state.select(Some(0)); // select first item
+
+        let _list = StatefulWidget::render(
+            List::new(list_items)
+                .block(data_block)
+                .highlight_symbol(">> ")
+                .highlight_style(Style::new().bold())
+                .repeat_highlight_symbol(true),
+            data_area,
+            buf,
+            &mut state,
+        );
+
+        // split data block into two
     }
 }
 
