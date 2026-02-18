@@ -74,17 +74,8 @@ impl Page {
         frame.render_stateful_widget(self, frame.area(), &mut state);
         Ok(())
     }
-}
 
-impl StatefulWidget for &Page {
-    type State = State;
-
-    fn render(self, area: Rect, buf: &mut Buffer, state: &mut Self::State) {
-        let layout = Layout::default()
-            .direction(Direction::Vertical)
-            .constraints(vec![Constraint::Percentage(25), Constraint::Percentage(75)]);
-        let [title_area, data_area] = layout.areas(area);
-
+    fn render_title_area(&self, area: Rect, buf: &mut Buffer) {
         let instructions = Line::from(vec![
             " Down ".into(),
             "<Down>".blue().bold(),
@@ -98,8 +89,10 @@ impl StatefulWidget for &Page {
             .title(Line::from("  Foo overview  ").bold().centered())
             .border_set(border::DOUBLE)
             .title_bottom(instructions.centered())
-            .render(title_area, buf);
+            .render(area, buf);
+    }
 
+    fn render_data_area(&self, area: Rect, buf: &mut Buffer, state: &mut State) {
         let data_block = Block::bordered()
             .title(Line::from("  Data overview  ").bold().centered())
             .border_set(border::DOUBLE);
@@ -120,29 +113,47 @@ impl StatefulWidget for &Page {
                 .highlight_symbol(">> ")
                 .highlight_style(Style::new().bold())
                 .repeat_highlight_symbol(true),
-            data_area,
+            area,
             buf,
             &mut list_state,
         );
+    }
+
+    fn render_error_popup(&self, area: Rect, buf: &mut Buffer, err: &str) {
+        let instructions = Line::from(vec![" Exit ".into(), "<q> ".blue().bold()]);
+
+        let block = Block::bordered()
+            .title(Line::from("  Error!  ").bold().centered())
+            .title_bottom(instructions.centered());
+
+        let popup_area = popup_area(area, 80, 80);
+
+        Clear::render(Clear, popup_area, buf);
+        Paragraph::new(Line::raw(err))
+            .block(block.clone())
+            .red()
+            .centered()
+            .wrap(Wrap { trim: true })
+            .render(popup_area, buf);
+
+        block.render(popup_area, buf);
+    }
+}
+
+impl StatefulWidget for &Page {
+    type State = State;
+
+    fn render(self, area: Rect, buf: &mut Buffer, state: &mut Self::State) {
+        let layout = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints(vec![Constraint::Percentage(25), Constraint::Percentage(75)]);
+        let [title_area, data_area] = layout.areas(area);
+
+        self.render_title_area(title_area, buf);
+        self.render_data_area(data_area, buf, state);
 
         if let Some(err) = state.read_error() {
-            let instructions = Line::from(vec![" Exit ".into(), "<q> ".blue().bold()]);
-
-            let block = Block::bordered()
-                .title(Line::from("  Error!  ").bold().centered())
-                .title_bottom(instructions.centered());
-
-            let popup_area = popup_area(area, 80, 80);
-
-            Clear::render(Clear, popup_area, buf);
-            Paragraph::new(Line::raw(err))
-                .block(block.clone())
-                .red()
-                .centered()
-                .wrap(Wrap { trim: true })
-                .render(popup_area, buf);
-
-            block.render(popup_area, buf);
+            self.render_error_popup(area, buf, err);
         }
     }
 }
