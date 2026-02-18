@@ -4,6 +4,7 @@ use std::{
     thread,
 };
 
+use super::state::{self, StateClient};
 use crossterm::event::{self, Event as CrosstermEvent, KeyCode, KeyEvent, KeyEventKind};
 use ratatui::{
     DefaultTerminal, Frame,
@@ -14,7 +15,6 @@ use ratatui::{
     text::Line,
     widgets::{Block, List, ListItem, ListState, StatefulWidget, Widget},
 };
-use super::state::{self, StateClient};
 
 pub struct Page;
 
@@ -54,13 +54,17 @@ impl Page {
         key_event: KeyEvent,
         state_client: &StateClient,
     ) -> io::Result<()> {
-        if key_event.kind == KeyEventKind::Press && key_event.code == KeyCode::Char('q') {
-            state_client.update_exit(true);
-        } else if key_event.kind == KeyEventKind::Press && key_event.code == KeyCode::Up {
-            state_client.update_list_item_index(KeyCode::Up).unwrap();
-        } else if key_event.kind == KeyEventKind::Press && key_event.code == KeyCode::Down {
-            state_client.update_list_item_index(KeyCode::Down).unwrap();
+        if key_event.kind == KeyEventKind::Press {
+            match key_event.code {
+                KeyCode::Char('q') => state_client.update_exit(true),
+                KeyCode::Char('p') => state_client.update_popup(true),
+                KeyCode::Up => state_client.update_list_item_index(KeyCode::Up).unwrap(),
+                KeyCode::Down => state_client.update_list_item_index(KeyCode::Down).unwrap(),
+                _ => {}
+            }
         }
+
+        // KeyCode::Char('p') => self.show_popup = !self.show_popup,
 
         Ok(())
     }
@@ -105,8 +109,8 @@ impl StatefulWidget for &Page {
             .collect();
 
         let index = state.read_list_item_index();
-        let mut state = ListState::default();
-        state.select(Some(index)); // select first item
+        let mut list_state = ListState::default();
+        list_state.select(Some(index)); // select first item
 
         let _list = StatefulWidget::render(
             List::new(list_items)
@@ -116,9 +120,25 @@ impl StatefulWidget for &Page {
                 .repeat_highlight_symbol(true),
             data_area,
             buf,
-            &mut state,
+            &mut list_state,
         );
+
+        if state.read_popup() {
+            let block = Block::bordered().title("Popup");
+            let area = popup_area(area, 60, 20);
+
+            ratatui::widgets::Clear::render(ratatui::widgets::Clear, area, buf);
+            block.render(area, buf);
+        }
     }
+}
+
+fn popup_area(area: Rect, percent_x: u16, percent_y: u16) -> Rect {
+    let vertical = Layout::vertical([Constraint::Percentage(percent_y)]).flex(ratatui::layout::Flex::Center);
+    let horizontal = Layout::horizontal([Constraint::Percentage(percent_x)]).flex(ratatui::layout::Flex::Center);
+    let [area] = vertical.areas(area);
+    let [area] = horizontal.areas(area);
+    area
 }
 
 fn handle_input_events(events_tx: &Sender<Event>) -> Result<(), String> {

@@ -1,14 +1,14 @@
+use crossterm::event::KeyCode;
 use std::{
     sync::mpsc::{self, Receiver, Sender, SyncSender, sync_channel},
     thread,
 };
-use crossterm::event::KeyCode;
-
 
 #[derive(Default)]
 struct State {
     exit: bool,
     list_item_index: usize,
+    popup: bool
 }
 
 pub struct StateClient {
@@ -20,10 +20,12 @@ enum StateActions {
     ReadExit(SyncSender<bool>),
     UpdateListItemIndex(i8),
     ReadListItemIndex(SyncSender<usize>),
+    UpdatePopup(bool),
+    ReadPopup(SyncSender<bool>),
+
 }
 
 pub fn init() -> StateClient {
-
     let (state_update_tx, state_update_rx) = mpsc::channel::<StateActions>();
 
     thread::spawn(move || {
@@ -39,7 +41,6 @@ pub fn init() -> StateClient {
 }
 
 impl State {
-
     fn handle_state_updates(
         state_update_rx: &Receiver<StateActions>,
         state: &mut State,
@@ -63,6 +64,12 @@ impl State {
                     if let Err(err) = sender.send(state.list_item_index) {
                         return Err(err.to_string());
                     }
+                },
+                StateActions::UpdatePopup(v) => state.popup = v,
+                StateActions::ReadPopup(sender) => {
+                    if let Err(err) = sender.send(state.popup) {
+                        return Err(err.to_string());
+                    }
                 }
             }
         }
@@ -79,6 +86,12 @@ impl StateClient {
     pub fn update_exit(&self, exit: bool) {
         self.state_update_tx
             .send(StateActions::UpdateExit(exit))
+            .unwrap();
+    }
+
+    pub fn update_popup(&self, popup: bool) {
+        self.state_update_tx
+            .send(StateActions::UpdatePopup(popup))
             .unwrap();
     }
 
@@ -111,5 +124,14 @@ impl StateClient {
             .unwrap();
         let index = receiver.recv().unwrap();
         index
+    }
+
+    pub fn read_popup(&self) -> bool {
+        let (sender, receiver) = sync_channel(1);
+        self.state_update_tx
+            .send(StateActions::ReadPopup(sender))
+            .unwrap();
+        let popup = receiver.recv().unwrap();
+        popup
     }
 }
