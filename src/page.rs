@@ -1,11 +1,10 @@
-use std::{
-    io,
-    sync::mpsc::{self, Sender},
-    thread,
-};
+use std::io;
 
-use super::state::{self, State, StateClient};
-use crossterm::event::{self, Event as CrosstermEvent, KeyCode, KeyEvent, KeyEventKind};
+use super::{
+    event::{self, Event},
+    state::{self, State, StateClient},
+};
+use crossterm::event::{KeyCode, KeyEvent, KeyEventKind};
 use ratatui::{
     DefaultTerminal, Frame,
     buffer::Buffer,
@@ -18,25 +17,10 @@ use ratatui::{
 
 pub struct Page;
 
-enum Event {
-    UserInput(KeyEvent),
-}
-
 impl Page {
     pub fn run(&mut self, terminal: &mut DefaultTerminal) -> io::Result<()> {
         let state_client = state::init();
-        let task_state_client = state_client.clone();
-
-        let (events_tx, events_rx) = mpsc::channel::<Event>();
-        thread::spawn(move || {
-            loop {
-                if let Err(err) = handle_input_events(&events_tx) {
-                    task_state_client
-                        .update_error(Some(err.to_string()))
-                        .expect("REASON")
-                }
-            }
-        });
+        let events_rx = event::init(state_client.clone());
 
         while state_client.read_exit().is_ok_and(|v| !v) {
             terminal.draw(|frame| self.draw(frame, &state_client).expect("REASON"))?;
@@ -169,18 +153,4 @@ fn popup_area(area: Rect, percent_x: u16, percent_y: u16) -> Rect {
     let [area] = vertical.areas(area);
     let [area] = horizontal.areas(area);
     area
-}
-
-fn handle_input_events(events_tx: &Sender<Event>) -> Result<(), String> {
-    match event::read() {
-        Ok(CrosstermEvent::Key(key_event)) => {
-            if let Err(err) = events_tx.send(Event::UserInput(key_event)) {
-                return Err(err.to_string());
-            }
-        }
-        Err(err) => return Err(err.to_string()),
-        _ => {}
-    };
-
-    Ok(())
 }

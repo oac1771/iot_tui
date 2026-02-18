@@ -1,3 +1,4 @@
+mod event;
 mod page;
 mod state;
 
