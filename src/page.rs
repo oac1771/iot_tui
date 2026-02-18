@@ -9,11 +9,11 @@ use crossterm::event::{self, Event as CrosstermEvent, KeyCode, KeyEvent, KeyEven
 use ratatui::{
     DefaultTerminal, Frame,
     buffer::Buffer,
-    layout::{Alignment, Constraint, Direction, Layout, Rect},
+    layout::{Alignment, Constraint, Direction, Layout, Rect, Flex},
     style::{Style, Stylize},
     symbols::border,
     text::Line,
-    widgets::{Block, List, ListItem, ListState, StatefulWidget, Widget},
+    widgets::{Clear, Block, List, ListItem, ListState, StatefulWidget, Widget},
 };
 
 pub struct Page;
@@ -66,14 +66,14 @@ impl Page {
 
         if key_event.kind == KeyEventKind::Press && !is_error {
             match key_event.code {
-                KeyCode::Char('q') => state_client.update_exit(),
+                KeyCode::Esc => state_client.update_exit(),
                 KeyCode::Up => state_client.update_list_item_index(KeyCode::Up)?,
                 KeyCode::Down => state_client.update_list_item_index(KeyCode::Down)?,
                 _ => {}
             }
         } else if key_event.kind == KeyEventKind::Press && is_error {
             match key_event.code {
-                KeyCode::Esc => state_client.update_is_error(),
+                KeyCode::Char('q') => state_client.update_is_error(),
                 _ => {}
             }
         }
@@ -101,7 +101,7 @@ impl StatefulWidget for &Page {
             " Up ".into(),
             "<Up>".blue().bold(),
             " Quit ".into(),
-            "<Q> ".blue().bold(),
+            "<Esc> ".blue().bold(),
         ]);
 
         let _title_block = Block::bordered()
@@ -137,24 +137,25 @@ impl StatefulWidget for &Page {
 
         if state.read_is_error() {
             let instructions =
-                Line::from(vec![" Exit Error Popup ".into(), "<Esc> ".blue().bold()]);
+                Line::from(vec![" Exit ".into(), "<q> ".blue().bold()]);
 
             let block = Block::bordered()
                 .title(Line::from("  Error!  ").bold().centered())
                 .title_bottom(instructions.centered());
-            let area = popup_area(area, 60, 20);
 
-            ratatui::widgets::Clear::render(ratatui::widgets::Clear, area, buf);
-            block.render(area, buf);
+            let popup_area = popup_area(area, 80, 80);
+
+            Clear::render(Clear, popup_area, buf);
+            block.render(popup_area, buf);
         }
     }
 }
 
 fn popup_area(area: Rect, percent_x: u16, percent_y: u16) -> Rect {
     let vertical =
-        Layout::vertical([Constraint::Percentage(percent_y)]).flex(ratatui::layout::Flex::Center);
+        Layout::vertical([Constraint::Percentage(percent_y)]).flex(Flex::Center);
     let horizontal =
-        Layout::horizontal([Constraint::Percentage(percent_x)]).flex(ratatui::layout::Flex::Center);
+        Layout::horizontal([Constraint::Percentage(percent_x)]).flex(Flex::Center);
     let [area] = vertical.areas(area);
     let [area] = horizontal.areas(area);
     area
