@@ -2,7 +2,7 @@ tutorials: https://ratatui.rs/tutorials/
 
 todo:
 - do error handling
-    use thiserror for state to create StateError
+    figure out final unwrap situation
     
 - Create scan command
     creates random list to begin with

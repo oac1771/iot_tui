@@ -13,7 +13,7 @@ use ratatui::{
     style::{Style, Stylize},
     symbols::border,
     text::Line,
-    widgets::{Block, Clear, List, ListItem, ListState, StatefulWidget, Widget},
+    widgets::{Block, Clear, List, ListItem, ListState, Paragraph, StatefulWidget, Widget, Wrap},
 };
 
 pub struct Page;
@@ -23,19 +23,17 @@ enum Event {
 }
 
 impl Page {
-    pub fn new() -> Self {
-        Self
-    }
-
     pub fn run(&mut self, terminal: &mut DefaultTerminal) -> io::Result<()> {
         let mut state_client = state::init();
+        let task_state_client = state_client.clone();
 
         let (events_tx, events_rx) = mpsc::channel::<Event>();
         thread::spawn(move || {
             loop {
                 if let Err(err) = handle_input_events(&events_tx) {
-                    // send error here to state_client
-                    println!("Input Error: {:?}", err);
+                    if let Err(err) = task_state_client.update_error(Some(err.to_string())) {
+                        panic!("Input Error: {err:?}");
+                    }
                 }
             }
         });
@@ -50,8 +48,10 @@ impl Page {
                 Err(err) => Err(err.to_string()),
             };
 
-            if let Err(_) = result {
-                state_client.update_is_error().unwrap();
+            if let Err(err) = result {
+                if let Err(err) = state_client.update_error(Some(err)) {
+                    panic!("Error: {err:?}");
+                }
             }
         }
 
@@ -63,11 +63,9 @@ impl Page {
         key_event: KeyEvent,
         state_client: &StateClient,
     ) -> Result<(), String> {
-        let is_error = state_client
-            .read_is_error()
-            .map_err(|err| err.to_string())?;
+        let is_error = state_client.read_error().map_err(|err| err.to_string())?;
 
-        if key_event.kind == KeyEventKind::Press && !is_error {
+        if key_event.kind == KeyEventKind::Press && is_error.is_none() {
             match key_event.code {
                 KeyCode::Esc => state_client.update_exit().map_err(|err| err.to_string())?,
                 KeyCode::Up => state_client
@@ -78,12 +76,11 @@ impl Page {
                     .map_err(|err| err.to_string())?,
                 _ => {}
             }
-        } else if key_event.kind == KeyEventKind::Press && is_error {
-            match key_event.code {
-                KeyCode::Char('q') => state_client
-                    .update_is_error()
-                    .map_err(|err| err.to_string())?,
-                _ => {}
+        } else if key_event.kind == KeyEventKind::Press && is_error.is_some() {
+            if let KeyCode::Char('q') = key_event.code {
+                state_client
+                    .update_error(None)
+                    .map_err(|err| err.to_string())?
             }
         }
 
@@ -113,7 +110,7 @@ impl StatefulWidget for &Page {
             "<Esc> ".blue().bold(),
         ]);
 
-        let _title_block = Block::bordered()
+        Block::bordered()
             .title(Line::from("  Foo overview  ").bold().centered())
             .border_set(border::DOUBLE)
             .title_bottom(instructions.centered())
@@ -133,7 +130,7 @@ impl StatefulWidget for &Page {
         let mut list_state = ListState::default();
         list_state.select(Some(list_index));
 
-        let _list = StatefulWidget::render(
+        StatefulWidget::render(
             List::new(list_items)
                 .block(data_block)
                 .highlight_symbol(">> ")
@@ -144,7 +141,7 @@ impl StatefulWidget for &Page {
             &mut list_state,
         );
 
-        if state.read_is_error().is_ok_and(|v| v) {
+        if let Ok(Some(err)) = state.read_error() {
             let instructions = Line::from(vec![" Exit ".into(), "<q> ".blue().bold()]);
 
             let block = Block::bordered()
@@ -154,6 +151,13 @@ impl StatefulWidget for &Page {
             let popup_area = popup_area(area, 80, 80);
 
             Clear::render(Clear, popup_area, buf);
+            Paragraph::new(Line::raw(err))
+                .block(block.clone())
+                .red()
+                .centered()
+                .wrap(Wrap { trim: true })
+                .render(popup_area, buf);
+            
             block.render(popup_area, buf);
         }
     }

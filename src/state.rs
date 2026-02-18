@@ -8,9 +8,10 @@ use std::{
 struct State {
     exit: bool,
     list_item_index: usize,
-    is_error: bool,
+    error: Option<String>,
 }
 
+#[derive(Clone)]
 pub struct StateClient {
     state_update_tx: Sender<StateActions>,
 }
@@ -21,23 +22,27 @@ pub enum StateActions {
     ReadExit(SyncSender<bool>),
     UpdateListItemIndex(i8),
     ReadListItemIndex(SyncSender<usize>),
-    UpdateIsError,
-    ReadIsError(SyncSender<bool>),
+    UpdateError(Option<String>),
+    ReadError(SyncSender<Option<String>>),
 }
 
 pub fn init() -> StateClient {
     let (state_update_tx, state_update_rx) = mpsc::channel::<StateActions>();
+    let state_client = StateClient::new(state_update_tx);
+    let task_state_client = state_client.clone();
 
     thread::spawn(move || {
         let mut state = State::default();
         loop {
             if let Err(err) = State::handle_state_updates(&state_update_rx, &mut state) {
-                println!("Err: {:?}", err);
+                if let Err(err) = task_state_client.update_error(Some(err)) {
+                    panic!("Err: {err:?}");
+                }
             }
         }
     });
 
-    StateClient::new(state_update_tx)
+    state_client
 }
 
 impl State {
@@ -65,9 +70,9 @@ impl State {
                         return Err(err.to_string());
                     }
                 }
-                StateActions::UpdateIsError => state.is_error = !state.is_error,
-                StateActions::ReadIsError(sender) => {
-                    if let Err(err) = sender.send(state.is_error) {
+                StateActions::UpdateError(err) => state.error = err,
+                StateActions::ReadError(sender) => {
+                    if let Err(err) = sender.send(state.error.clone()) {
                         return Err(err.to_string());
                     }
                 }
@@ -101,8 +106,8 @@ impl StateClient {
         Err(Error::UnexpectedKeyCode)
     }
 
-    pub fn update_is_error(&self) -> Result<(), Error<StateActions>> {
-        self.state_update_tx.send(StateActions::UpdateIsError)?;
+    pub fn update_error(&self, err: Option<String>) -> Result<(), Error<StateActions>> {
+        self.state_update_tx.send(StateActions::UpdateError(err))?;
 
         Ok(())
     }
@@ -122,12 +127,11 @@ impl StateClient {
         Ok(index)
     }
 
-    pub fn read_is_error(&self) -> Result<bool, Error<StateActions>> {
+    pub fn read_error(&self) -> Result<Option<String>, Error<StateActions>> {
         let (sender, receiver) = sync_channel(1);
-        self.state_update_tx
-            .send(StateActions::ReadIsError(sender))?;
-        let is_error = receiver.recv()?;
-        Ok(is_error)
+        self.state_update_tx.send(StateActions::ReadError(sender))?;
+        let error = receiver.recv()?;
+        Ok(error)
     }
 }
 
@@ -143,6 +147,6 @@ pub enum Error<T> {
         #[from]
         source: std::sync::mpsc::RecvError,
     },
-    #[error("")]
+    #[error("Unexpected Key Code")]
     UnexpectedKeyCode,
 }
