@@ -76,6 +76,12 @@ impl Page {
     }
 
     fn render_title_area(&self, area: Rect, buf: &mut Buffer) {
+        let layout = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints(vec![Constraint::Percentage(35), Constraint::Percentage(65)]);
+
+        let [cmd_area, meta_data_area] = layout.areas(area);
+
         let instructions = Line::from(vec![
             " Down ".into(),
             "<Down>".blue().bold(),
@@ -85,16 +91,29 @@ impl Page {
             "<Esc> ".blue().bold(),
         ]);
 
-        Block::bordered()
-            .title(Line::from("  Foo overview  ").bold().centered())
+        let cmd_block = Block::bordered()
+            .title(Line::from("  ****  ").bold().centered())
             .border_set(border::DOUBLE)
-            .title_bottom(instructions.centered())
-            .render(area, buf);
+            .title_bottom(instructions.centered());
+
+        Block::bordered()
+            .title(Line::from("  ****  ").bold().centered())
+            .border_set(border::DOUBLE)
+            .render(meta_data_area, buf);
+
+        let cmds = Line::from(vec![" Scan ".into(), "<s>".blue().bold()]);
+
+        Paragraph::new(cmds)
+            .block(cmd_block)
+            .white()
+            .left_aligned()
+            .wrap(Wrap { trim: true })
+            .render(cmd_area, buf);
     }
 
     fn render_data_area(&self, area: Rect, buf: &mut Buffer, state: &mut State) {
         let data_block = Block::bordered()
-            .title(Line::from("  Data overview  ").bold().centered())
+            .title(Line::from("  ~~~~~~~~~~~~~  ").bold().centered())
             .border_set(border::DOUBLE);
 
         let items = ["Item 1", "Item 2", "Item 3"];
