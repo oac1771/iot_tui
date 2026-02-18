@@ -41,8 +41,16 @@ impl Page {
 
         while !state_client.read_exit() {
             terminal.draw(|frame| self.draw(frame, &mut state_client))?;
-            match events_rx.recv().unwrap() {
-                Event::UserInput(key_event) => self.handle_key_event(key_event, &state_client)?,
+
+            let result = match events_rx.recv() {
+                Ok(Event::UserInput(key_event)) => self
+                    .handle_key_event(key_event, &state_client)
+                    .map_err(|err| err.to_string()),
+                Err(err) => Err(err.to_string()),
+            };
+
+            if let Err(_) = result {
+                state_client.update_is_error();
             }
         }
 
@@ -53,18 +61,22 @@ impl Page {
         &mut self,
         key_event: KeyEvent,
         state_client: &StateClient,
-    ) -> io::Result<()> {
-        if key_event.kind == KeyEventKind::Press {
+    ) -> Result<(), String> {
+        let is_error = state_client.read_is_error();
+
+        if key_event.kind == KeyEventKind::Press && !is_error {
             match key_event.code {
-                KeyCode::Char('q') => state_client.update_exit(true),
-                KeyCode::Char('p') => state_client.update_popup(true),
-                KeyCode::Up => state_client.update_list_item_index(KeyCode::Up).unwrap(),
-                KeyCode::Down => state_client.update_list_item_index(KeyCode::Down).unwrap(),
+                KeyCode::Char('q') => state_client.update_exit(),
+                KeyCode::Up => state_client.update_list_item_index(KeyCode::Up)?,
+                KeyCode::Down => state_client.update_list_item_index(KeyCode::Down)?,
+                _ => {}
+            }
+        } else if key_event.kind == KeyEventKind::Press && is_error {
+            match key_event.code {
+                KeyCode::Esc => state_client.update_is_error(),
                 _ => {}
             }
         }
-
-        // KeyCode::Char('p') => self.show_popup = !self.show_popup,
 
         Ok(())
     }
@@ -123,8 +135,13 @@ impl StatefulWidget for &Page {
             &mut list_state,
         );
 
-        if state.read_popup() {
-            let block = Block::bordered().title("Popup");
+        if state.read_is_error() {
+            let instructions =
+                Line::from(vec![" Exit Error Popup ".into(), "<Esc> ".blue().bold()]);
+
+            let block = Block::bordered()
+                .title(Line::from("  Error!  ").bold().centered())
+                .title_bottom(instructions.centered());
             let area = popup_area(area, 60, 20);
 
             ratatui::widgets::Clear::render(ratatui::widgets::Clear, area, buf);
@@ -134,8 +151,10 @@ impl StatefulWidget for &Page {
 }
 
 fn popup_area(area: Rect, percent_x: u16, percent_y: u16) -> Rect {
-    let vertical = Layout::vertical([Constraint::Percentage(percent_y)]).flex(ratatui::layout::Flex::Center);
-    let horizontal = Layout::horizontal([Constraint::Percentage(percent_x)]).flex(ratatui::layout::Flex::Center);
+    let vertical =
+        Layout::vertical([Constraint::Percentage(percent_y)]).flex(ratatui::layout::Flex::Center);
+    let horizontal =
+        Layout::horizontal([Constraint::Percentage(percent_x)]).flex(ratatui::layout::Flex::Center);
     let [area] = vertical.areas(area);
     let [area] = horizontal.areas(area);
     area

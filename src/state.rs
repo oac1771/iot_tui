@@ -8,7 +8,7 @@ use std::{
 struct State {
     exit: bool,
     list_item_index: usize,
-    popup: bool
+    is_error: bool,
 }
 
 pub struct StateClient {
@@ -16,13 +16,12 @@ pub struct StateClient {
 }
 
 enum StateActions {
-    UpdateExit(bool),
+    UpdateExit,
     ReadExit(SyncSender<bool>),
     UpdateListItemIndex(i8),
     ReadListItemIndex(SyncSender<usize>),
-    UpdatePopup(bool),
-    ReadPopup(SyncSender<bool>),
-
+    UpdateIsError,
+    ReadIsError(SyncSender<bool>),
 }
 
 pub fn init() -> StateClient {
@@ -47,7 +46,7 @@ impl State {
     ) -> Result<(), String> {
         while let Ok(action) = state_update_rx.recv() {
             match action {
-                StateActions::UpdateExit(v) => state.exit = v,
+                StateActions::UpdateExit => state.exit = !state.exit,
                 StateActions::ReadExit(sender) => {
                     if let Err(err) = sender.send(state.exit) {
                         return Err(err.to_string());
@@ -64,10 +63,10 @@ impl State {
                     if let Err(err) = sender.send(state.list_item_index) {
                         return Err(err.to_string());
                     }
-                },
-                StateActions::UpdatePopup(v) => state.popup = v,
-                StateActions::ReadPopup(sender) => {
-                    if let Err(err) = sender.send(state.popup) {
+                }
+                StateActions::UpdateIsError => state.is_error = !state.is_error,
+                StateActions::ReadIsError(sender) => {
+                    if let Err(err) = sender.send(state.is_error) {
                         return Err(err.to_string());
                     }
                 }
@@ -83,29 +82,28 @@ impl StateClient {
         Self { state_update_tx }
     }
 
-    pub fn update_exit(&self, exit: bool) {
-        self.state_update_tx
-            .send(StateActions::UpdateExit(exit))
-            .unwrap();
-    }
-
-    pub fn update_popup(&self, popup: bool) {
-        self.state_update_tx
-            .send(StateActions::UpdatePopup(popup))
-            .unwrap();
+    pub fn update_exit(&self) {
+        self.state_update_tx.send(StateActions::UpdateExit).unwrap();
     }
 
     pub fn update_list_item_index(&self, code: KeyCode) -> Result<(), String> {
-        let update = match code {
-            KeyCode::Up => -1,
-            KeyCode::Down => 1,
-            _ => return Err(String::from("Foo")),
-        };
-        self.state_update_tx
-            .send(StateActions::UpdateListItemIndex(update))
-            .unwrap();
+        // let update = match code {
+        //     KeyCode::Up => -1,
+        //     KeyCode::Down => 1,
+        //     _ => return Err(String::from("Foo")),
+        // };
+        // self.state_update_tx
+        //     .send(StateActions::UpdateListItemIndex(update))
+        //     .unwrap();
 
-        Ok(())
+        // Ok(())
+        Err(String::from("foo"))
+    }
+
+    pub fn update_is_error(&self) {
+        self.state_update_tx
+            .send(StateActions::UpdateIsError)
+            .unwrap();
     }
 
     pub fn read_exit(&self) -> bool {
@@ -126,12 +124,12 @@ impl StateClient {
         index
     }
 
-    pub fn read_popup(&self) -> bool {
+    pub fn read_is_error(&self) -> bool {
         let (sender, receiver) = sync_channel(1);
         self.state_update_tx
-            .send(StateActions::ReadPopup(sender))
+            .send(StateActions::ReadIsError(sender))
             .unwrap();
-        let popup = receiver.recv().unwrap();
-        popup
+        let exit = receiver.recv().unwrap();
+        exit
     }
 }
