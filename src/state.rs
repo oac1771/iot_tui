@@ -15,7 +15,8 @@ pub struct StateClient {
     state_update_tx: Sender<StateActions>,
 }
 
-enum StateActions {
+#[derive(Debug)]
+pub enum StateActions {
     UpdateExit,
     ReadExit(SyncSender<bool>),
     UpdateListItemIndex(i8),
@@ -82,54 +83,66 @@ impl StateClient {
         Self { state_update_tx }
     }
 
-    pub fn update_exit(&self) {
-        self.state_update_tx.send(StateActions::UpdateExit).unwrap();
+    pub fn update_exit(&self) -> Result<(), Error<StateActions>> {
+        self.state_update_tx.send(StateActions::UpdateExit)?;
+        Ok(())
     }
 
-    pub fn update_list_item_index(&self, code: KeyCode) -> Result<(), String> {
+    pub fn update_list_item_index(&self, code: KeyCode) -> Result<(), Error<StateActions>> {
         // let update = match code {
         //     KeyCode::Up => -1,
         //     KeyCode::Down => 1,
-        //     _ => return Err(String::from("Foo")),
+        //     _ => return Err(Error::UnexpectedKeyCode),
         // };
         // self.state_update_tx
-        //     .send(StateActions::UpdateListItemIndex(update))
-        //     .unwrap();
+        //     .send(StateActions::UpdateListItemIndex(update))?;
 
         // Ok(())
-        Err(String::from("foo"))
+        Err(Error::UnexpectedKeyCode)
     }
 
-    pub fn update_is_error(&self) {
-        self.state_update_tx
-            .send(StateActions::UpdateIsError)
-            .unwrap();
+    pub fn update_is_error(&self) -> Result<(), Error<StateActions>> {
+        self.state_update_tx.send(StateActions::UpdateIsError)?;
+
+        Ok(())
     }
 
-    pub fn read_exit(&self) -> bool {
+    pub fn read_exit(&self) -> Result<bool, Error<StateActions>> {
+        let (sender, receiver) = sync_channel(1);
+        self.state_update_tx.send(StateActions::ReadExit(sender))?;
+        let exit = receiver.recv()?;
+        Ok(exit)
+    }
+
+    pub fn read_list_item_index(&self) -> Result<usize, Error<StateActions>> {
         let (sender, receiver) = sync_channel(1);
         self.state_update_tx
-            .send(StateActions::ReadExit(sender))
-            .unwrap();
-        let exit = receiver.recv().unwrap();
-        exit
+            .send(StateActions::ReadListItemIndex(sender))?;
+        let index = receiver.recv()?;
+        Ok(index)
     }
 
-    pub fn read_list_item_index(&self) -> usize {
+    pub fn read_is_error(&self) -> Result<bool, Error<StateActions>> {
         let (sender, receiver) = sync_channel(1);
         self.state_update_tx
-            .send(StateActions::ReadListItemIndex(sender))
-            .unwrap();
-        let index = receiver.recv().unwrap();
-        index
+            .send(StateActions::ReadIsError(sender))?;
+        let is_error = receiver.recv()?;
+        Ok(is_error)
     }
+}
 
-    pub fn read_is_error(&self) -> bool {
-        let (sender, receiver) = sync_channel(1);
-        self.state_update_tx
-            .send(StateActions::ReadIsError(sender))
-            .unwrap();
-        let exit = receiver.recv().unwrap();
-        exit
-    }
+#[derive(Debug, thiserror::Error)]
+pub enum Error<T> {
+    #[error("{source}")]
+    Send {
+        #[from]
+        source: std::sync::mpsc::SendError<T>,
+    },
+    #[error("{source}")]
+    Recv {
+        #[from]
+        source: std::sync::mpsc::RecvError,
+    },
+    #[error("")]
+    UnexpectedKeyCode,
 }

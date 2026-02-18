@@ -9,11 +9,11 @@ use crossterm::event::{self, Event as CrosstermEvent, KeyCode, KeyEvent, KeyEven
 use ratatui::{
     DefaultTerminal, Frame,
     buffer::Buffer,
-    layout::{Alignment, Constraint, Direction, Layout, Rect, Flex},
+    layout::{Alignment, Constraint, Direction, Flex, Layout, Rect},
     style::{Style, Stylize},
     symbols::border,
     text::Line,
-    widgets::{Clear, Block, List, ListItem, ListState, StatefulWidget, Widget},
+    widgets::{Block, Clear, List, ListItem, ListState, StatefulWidget, Widget},
 };
 
 pub struct Page;
@@ -34,12 +34,13 @@ impl Page {
         thread::spawn(move || {
             loop {
                 if let Err(err) = handle_input_events(&events_tx) {
+                    // send error here to state_client
                     println!("Input Error: {:?}", err);
                 }
             }
         });
 
-        while !state_client.read_exit() {
+        while state_client.read_exit().is_ok_and(|v| !v) {
             terminal.draw(|frame| self.draw(frame, &mut state_client))?;
 
             let result = match events_rx.recv() {
@@ -50,7 +51,7 @@ impl Page {
             };
 
             if let Err(_) = result {
-                state_client.update_is_error();
+                state_client.update_is_error().unwrap();
             }
         }
 
@@ -62,18 +63,26 @@ impl Page {
         key_event: KeyEvent,
         state_client: &StateClient,
     ) -> Result<(), String> {
-        let is_error = state_client.read_is_error();
+        let is_error = state_client
+            .read_is_error()
+            .map_err(|err| err.to_string())?;
 
         if key_event.kind == KeyEventKind::Press && !is_error {
             match key_event.code {
-                KeyCode::Esc => state_client.update_exit(),
-                KeyCode::Up => state_client.update_list_item_index(KeyCode::Up)?,
-                KeyCode::Down => state_client.update_list_item_index(KeyCode::Down)?,
+                KeyCode::Esc => state_client.update_exit().map_err(|err| err.to_string())?,
+                KeyCode::Up => state_client
+                    .update_list_item_index(KeyCode::Up)
+                    .map_err(|err| err.to_string())?,
+                KeyCode::Down => state_client
+                    .update_list_item_index(KeyCode::Down)
+                    .map_err(|err| err.to_string())?,
                 _ => {}
             }
         } else if key_event.kind == KeyEventKind::Press && is_error {
             match key_event.code {
-                KeyCode::Char('q') => state_client.update_is_error(),
+                KeyCode::Char('q') => state_client
+                    .update_is_error()
+                    .map_err(|err| err.to_string())?,
                 _ => {}
             }
         }
@@ -120,9 +129,9 @@ impl StatefulWidget for &Page {
             .map(|s| ListItem::new(Line::from(*s).alignment(Alignment::Center)))
             .collect();
 
-        let index = state.read_list_item_index();
+        let list_index = state.read_list_item_index().unwrap();
         let mut list_state = ListState::default();
-        list_state.select(Some(index)); // select first item
+        list_state.select(Some(list_index));
 
         let _list = StatefulWidget::render(
             List::new(list_items)
@@ -135,9 +144,8 @@ impl StatefulWidget for &Page {
             &mut list_state,
         );
 
-        if state.read_is_error() {
-            let instructions =
-                Line::from(vec![" Exit ".into(), "<q> ".blue().bold()]);
+        if state.read_is_error().is_ok_and(|v| v) {
+            let instructions = Line::from(vec![" Exit ".into(), "<q> ".blue().bold()]);
 
             let block = Block::bordered()
                 .title(Line::from("  Error!  ").bold().centered())
@@ -152,10 +160,8 @@ impl StatefulWidget for &Page {
 }
 
 fn popup_area(area: Rect, percent_x: u16, percent_y: u16) -> Rect {
-    let vertical =
-        Layout::vertical([Constraint::Percentage(percent_y)]).flex(Flex::Center);
-    let horizontal =
-        Layout::horizontal([Constraint::Percentage(percent_x)]).flex(Flex::Center);
+    let vertical = Layout::vertical([Constraint::Percentage(percent_y)]).flex(Flex::Center);
+    let horizontal = Layout::horizontal([Constraint::Percentage(percent_x)]).flex(Flex::Center);
     let [area] = vertical.areas(area);
     let [area] = horizontal.areas(area);
     area
