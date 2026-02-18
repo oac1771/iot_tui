@@ -4,7 +4,7 @@ use std::{
     thread,
 };
 
-use super::state::{self, StateClient};
+use super::state::{self, State, StateClient};
 use crossterm::event::{self, Event as CrosstermEvent, KeyCode, KeyEvent, KeyEventKind};
 use ratatui::{
     DefaultTerminal, Frame,
@@ -24,22 +24,22 @@ enum Event {
 
 impl Page {
     pub fn run(&mut self, terminal: &mut DefaultTerminal) -> io::Result<()> {
-        let mut state_client = state::init();
+        let state_client = state::init();
         let task_state_client = state_client.clone();
 
         let (events_tx, events_rx) = mpsc::channel::<Event>();
         thread::spawn(move || {
             loop {
                 if let Err(err) = handle_input_events(&events_tx) {
-                    if let Err(err) = task_state_client.update_error(Some(err.to_string())) {
-                        panic!("Input Error: {err:?}");
-                    }
+                    task_state_client
+                        .update_error(Some(err.to_string()))
+                        .expect("REASON")
                 }
             }
         });
 
         while state_client.read_exit().is_ok_and(|v| !v) {
-            terminal.draw(|frame| self.draw(frame, &mut state_client))?;
+            terminal.draw(|frame| self.draw(frame, &state_client).expect("REASON"))?;
 
             let result = match events_rx.recv() {
                 Ok(Event::UserInput(key_event)) => self
@@ -49,9 +49,7 @@ impl Page {
             };
 
             if let Err(err) = result {
-                if let Err(err) = state_client.update_error(Some(err)) {
-                    panic!("Error: {err:?}");
-                }
+                state_client.update_error(Some(err)).expect("REASON")
             }
         }
 
@@ -87,13 +85,15 @@ impl Page {
         Ok(())
     }
 
-    fn draw(&self, frame: &mut Frame, state_client: &mut StateClient) {
-        frame.render_stateful_widget(self, frame.area(), state_client);
+    fn draw(&self, frame: &mut Frame, state_client: &StateClient) -> Result<(), String> {
+        let mut state = state_client.to_state().map_err(|err| err.to_string())?;
+        frame.render_stateful_widget(self, frame.area(), &mut state);
+        Ok(())
     }
 }
 
 impl StatefulWidget for &Page {
-    type State = StateClient;
+    type State = State;
 
     fn render(self, area: Rect, buf: &mut Buffer, state: &mut Self::State) {
         let layout = Layout::default()
@@ -126,7 +126,7 @@ impl StatefulWidget for &Page {
             .map(|s| ListItem::new(Line::from(*s).alignment(Alignment::Center)))
             .collect();
 
-        let list_index = state.read_list_item_index().unwrap();
+        let list_index = state.read_list_item_index();
         let mut list_state = ListState::default();
         list_state.select(Some(list_index));
 
@@ -141,7 +141,7 @@ impl StatefulWidget for &Page {
             &mut list_state,
         );
 
-        if let Ok(Some(err)) = state.read_error() {
+        if let Some(err) = state.read_error() {
             let instructions = Line::from(vec![" Exit ".into(), "<q> ".blue().bold()]);
 
             let block = Block::bordered()
@@ -157,7 +157,7 @@ impl StatefulWidget for &Page {
                 .centered()
                 .wrap(Wrap { trim: true })
                 .render(popup_area, buf);
-            
+
             block.render(popup_area, buf);
         }
     }

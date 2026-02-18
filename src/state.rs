@@ -5,7 +5,7 @@ use std::{
 };
 
 #[derive(Default)]
-struct State {
+pub struct State {
     exit: bool,
     list_item_index: usize,
     error: Option<String>,
@@ -35,9 +35,7 @@ pub fn init() -> StateClient {
         let mut state = State::default();
         loop {
             if let Err(err) = State::handle_state_updates(&state_update_rx, &mut state) {
-                if let Err(err) = task_state_client.update_error(Some(err)) {
-                    panic!("Err: {err:?}");
-                }
+                task_state_client.update_error(Some(err)).expect("REASON")
             }
         }
     });
@@ -46,6 +44,14 @@ pub fn init() -> StateClient {
 }
 
 impl State {
+    pub fn read_list_item_index(&self) -> usize {
+        self.list_item_index
+    }
+
+    pub fn read_error(&self) -> &Option<String> {
+        &self.error
+    }
+
     fn handle_state_updates(
         state_update_rx: &Receiver<StateActions>,
         state: &mut State,
@@ -86,6 +92,14 @@ impl State {
 impl StateClient {
     fn new(state_update_tx: Sender<StateActions>) -> Self {
         Self { state_update_tx }
+    }
+
+    pub fn to_state(&self) -> Result<State, Error<StateActions>> {
+        Ok(State {
+            exit: self.read_exit()?,
+            list_item_index: self.read_list_item_index()?,
+            error: self.read_error()?,
+        })
     }
 
     pub fn update_exit(&self) -> Result<(), Error<StateActions>> {
