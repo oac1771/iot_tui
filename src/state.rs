@@ -94,16 +94,15 @@ impl StateClient {
     }
 
     pub fn update_list_item_index(&self, code: KeyCode) -> Result<(), Error<StateActions>> {
-        // let update = match code {
-        //     KeyCode::Up => -1,
-        //     KeyCode::Down => 1,
-        //     _ => return Err(Error::UnexpectedKeyCode),
-        // };
-        // self.state_update_tx
-        //     .send(StateActions::UpdateListItemIndex(update))?;
+        let update = match code {
+            KeyCode::Up => -1,
+            KeyCode::Down => 1,
+            _ => return Err(Error::UnexpectedKeyCode),
+        };
+        self.state_update_tx
+            .send(StateActions::UpdateListItemIndex(update))?;
 
-        // Ok(())
-        Err(Error::UnexpectedKeyCode)
+        Ok(())
     }
 
     pub fn update_error(&self, err: Option<String>) -> Result<(), Error<StateActions>> {
