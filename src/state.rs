@@ -72,7 +72,7 @@ impl State {
                     let len = state.scan_items.1.len();
 
                     let scan_item_index = if len == 0 {
-                        if update < 0 { len } else { 1 }
+                        0
                     } else {
                         ((state.scan_items.0 as isize + update as isize).rem_euclid(len as isize))
                             as usize
