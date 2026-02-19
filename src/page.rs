@@ -1,9 +1,8 @@
-use std::io;
-
 use super::{
     event::{self, Event},
     state::{self, State, StateClient},
 };
+use crate::commands::scan::ScanCmd;
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind};
 use ratatui::{
     DefaultTerminal, Frame,
@@ -14,6 +13,7 @@ use ratatui::{
     text::Line,
     widgets::{Block, Clear, List, ListItem, ListState, Paragraph, StatefulWidget, Widget, Wrap},
 };
+use std::io;
 
 pub struct Page;
 
@@ -22,7 +22,7 @@ impl Page {
         let state_client = state::init();
         let events_rx = event::init(state_client.clone());
 
-        while state_client.read_exit().is_ok_and(|v| !v) {
+        while state_client.get_exit().is_ok_and(|v| !v) {
             terminal.draw(|frame| {
                 self.draw(frame, &state_client)
                     .expect("Failure rendering terminal")
@@ -50,16 +50,17 @@ impl Page {
         key_event: KeyEvent,
         state_client: &StateClient,
     ) -> Result<(), String> {
-        let is_error = state_client.read_error().map_err(|err| err.to_string())?;
+        let is_error = state_client.get_error().map_err(|err| err.to_string())?;
 
         if key_event.kind == KeyEventKind::Press && is_error.is_none() {
             match key_event.code {
+                KeyCode::Char('s') => ScanCmd::handle(state_client)?,
                 KeyCode::Esc => state_client.update_exit().map_err(|err| err.to_string())?,
                 KeyCode::Up => state_client
-                    .update_list_item_index(KeyCode::Up)
+                    .update_scan_items_index(-1)
                     .map_err(|err| err.to_string())?,
                 KeyCode::Down => state_client
-                    .update_list_item_index(KeyCode::Down)
+                    .update_scan_items_index(1)
                     .map_err(|err| err.to_string())?,
                 _ => {}
             }
@@ -123,7 +124,7 @@ impl Page {
 
         let [list_area, data_area] = layout.areas(area);
 
-        let _data_block = Block::bordered()
+        Block::bordered()
             .title(Line::from("  ~~~~~~~~~~~~~  ").bold().centered())
             .border_set(border::DOUBLE)
             .render(data_area, buf);
@@ -132,25 +133,24 @@ impl Page {
             .title(Line::from(" ***** ").bold().centered())
             .border_set(border::DOUBLE);
 
-        let items = ["Item 1", "Item 2", "Item 3"];
-        let list_items: Vec<ListItem> = items
-            .iter()
-            .map(|s| ListItem::new(Line::from(*s).alignment(Alignment::Left)))
+        let (scan_items_index, scan_items) = state.get_scan_items();
+
+        let scan_list: Vec<ListItem> = scan_items
+            .map(|s| ListItem::new(Line::from(s).alignment(Alignment::Left)))
             .collect();
 
-        let list_index = state.read_list_item_index();
-        let mut list_state = ListState::default();
-        list_state.select(Some(list_index));
+        let mut scan_list_state = ListState::default();
+        scan_list_state.select(Some(scan_items_index));
 
         StatefulWidget::render(
-            List::new(list_items)
+            List::new(scan_list)
                 .block(list_block)
                 .highlight_symbol(">> ")
                 .highlight_style(Style::new().bold())
                 .repeat_highlight_symbol(true),
             list_area,
             buf,
-            &mut list_state,
+            &mut scan_list_state,
         );
     }
 
@@ -187,7 +187,7 @@ impl StatefulWidget for &Page {
         self.render_title_area(title_area, buf);
         self.render_data_area(data_area, buf, state);
 
-        if let Some(err) = state.read_error() {
+        if let Some(err) = state.get_error() {
             self.render_error_popup(area, buf, err);
         }
     }
