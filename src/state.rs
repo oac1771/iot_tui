@@ -29,15 +29,10 @@ pub enum StateActions {
 pub fn init() -> StateClient {
     let (state_update_tx, state_update_rx) = mpsc::channel::<StateActions>();
     let state_client = StateClient::new(state_update_tx);
-    let task_state_client = state_client.clone();
 
     thread::spawn(move || {
         let mut state = State::default();
-        loop {
-            if let Err(err) = State::handle_state_updates(&state_update_rx, &mut state) {
-                task_state_client.update_error(Some(err)).expect("REASON")
-            }
-        }
+        State::handle_state_updates(&state_update_rx, &mut state);
     });
 
     state_client
@@ -52,16 +47,18 @@ impl State {
         &self.error
     }
 
-    fn handle_state_updates(
-        state_update_rx: &Receiver<StateActions>,
-        state: &mut State,
-    ) -> Result<(), String> {
+    fn handle_state_updates(state_update_rx: &Receiver<StateActions>, state: &mut State) {
         while let Ok(action) = state_update_rx.recv() {
-            match action {
-                StateActions::UpdateExit => state.exit = !state.exit,
+            let result = match action {
+                StateActions::UpdateExit => {
+                    state.exit = !state.exit;
+                    Ok(())
+                }
                 StateActions::ReadExit(sender) => {
                     if let Err(err) = sender.send(state.exit) {
-                        return Err(err.to_string());
+                        Err(err.to_string())
+                    } else {
+                        Ok(())
                     }
                 }
                 StateActions::UpdateListItemIndex(update) => {
@@ -70,22 +67,32 @@ impl State {
                         .rem_euclid(len as isize))
                         as usize;
                     state.list_item_index = list_item_index;
+                    Ok(())
                 }
                 StateActions::ReadListItemIndex(sender) => {
                     if let Err(err) = sender.send(state.list_item_index) {
-                        return Err(err.to_string());
+                        Err(err.to_string())
+                    } else {
+                        Ok(())
                     }
                 }
-                StateActions::UpdateError(err) => state.error = err,
+                StateActions::UpdateError(err) => {
+                    state.error = err;
+                    Ok(())
+                }
                 StateActions::ReadError(sender) => {
                     if let Err(err) = sender.send(state.error.clone()) {
-                        return Err(err.to_string());
+                        Err(err.to_string())
+                    } else {
+                        Ok(())
                     }
                 }
-            }
-        }
+            };
 
-        Ok(())
+            if let Err(err) = result {
+                state.error = Some(err);
+            };
+        }
     }
 }
 

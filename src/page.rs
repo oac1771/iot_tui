@@ -23,7 +23,10 @@ impl Page {
         let events_rx = event::init(state_client.clone());
 
         while state_client.read_exit().is_ok_and(|v| !v) {
-            terminal.draw(|frame| self.draw(frame, &state_client).expect("REASON"))?;
+            terminal.draw(|frame| {
+                self.draw(frame, &state_client)
+                    .expect("Failure rendering terminal")
+            })?;
 
             let result = match events_rx.recv() {
                 Ok(Event::UserInput(key_event)) => self
@@ -33,7 +36,9 @@ impl Page {
             };
 
             if let Err(err) = result {
-                state_client.update_error(Some(err)).expect("REASON")
+                state_client
+                    .update_error(Some(err))
+                    .expect("Failure to update state with error")
             }
         }
 

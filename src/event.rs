@@ -17,7 +17,7 @@ pub fn init(state_client: StateClient) -> Receiver<Event> {
             if let Err(err) = handle_input_events(&events_tx) {
                 state_client
                     .update_error(Some(err.to_string()))
-                    .expect("REASON")
+                    .expect("Failure to update state with events error")
             }
         }
     });
