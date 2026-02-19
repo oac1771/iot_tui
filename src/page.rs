@@ -112,14 +112,25 @@ impl Page {
     }
 
     fn render_data_area(&self, area: Rect, buf: &mut Buffer, state: &mut State) {
-        let data_block = Block::bordered()
+        let layout = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints(vec![Constraint::Percentage(20), Constraint::Percentage(80)]);
+
+        let [list_area, data_area] = layout.areas(area);
+
+        let _data_block = Block::bordered()
             .title(Line::from("  ~~~~~~~~~~~~~  ").bold().centered())
+            .border_set(border::DOUBLE)
+            .render(data_area, buf);
+
+        let list_block = Block::bordered()
+            .title(Line::from(" ***** ").bold().centered())
             .border_set(border::DOUBLE);
 
         let items = ["Item 1", "Item 2", "Item 3"];
         let list_items: Vec<ListItem> = items
             .iter()
-            .map(|s| ListItem::new(Line::from(*s).alignment(Alignment::Center)))
+            .map(|s| ListItem::new(Line::from(*s).alignment(Alignment::Left)))
             .collect();
 
         let list_index = state.read_list_item_index();
@@ -128,11 +139,11 @@ impl Page {
 
         StatefulWidget::render(
             List::new(list_items)
-                .block(data_block)
+                .block(list_block)
                 .highlight_symbol(">> ")
                 .highlight_style(Style::new().bold())
                 .repeat_highlight_symbol(true),
-            area,
+            list_area,
             buf,
             &mut list_state,
         );
