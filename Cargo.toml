@@ -5,6 +5,7 @@ edition = "2024"
 
 [dependencies]
 crossterm = "0.29.0"
+futures-util = "0.3.32"
 ratatui = "0.30.0"
 thiserror = "2.0.18"
 tokio = { version = "1.44.1", features = ["rt-multi-thread", "macros"] }

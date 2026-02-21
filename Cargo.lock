@@ -743,6 +743,7 @@ name = "iot_tui"
 version = "0.1.0"
 dependencies = [
  "crossterm",
+ "futures-util",
  "iot_sdk",
  "ratatui",
  "thiserror 2.0.18",

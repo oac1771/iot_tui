@@ -17,17 +17,17 @@ use ratatui::{
 };
 
 #[derive(Clone)]
-pub struct HomePage {
+pub struct FooPage {
     state_client: StateClient,
 }
 
-impl Default for HomePage {
+impl Default for FooPage {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl HomePage {
+impl FooPage {
     pub fn new() -> Self {
         let state_client = state::init();
         Self { state_client }
@@ -135,7 +135,7 @@ fn popup_area(area: Rect, percent_x: u16, percent_y: u16) -> Rect {
     area
 }
 
-impl Page for HomePage {
+impl Page for FooPage {
     fn draw(&self, frame: &mut Frame) -> Result<(), String> {
         let mut state = self
             .state_client
@@ -181,7 +181,7 @@ impl Page for HomePage {
     }
 }
 
-impl StatefulWidget for HomePage {
+impl StatefulWidget for FooPage {
     type State = State;
 
     fn render(self, area: Rect, buf: &mut Buffer, state: &mut Self::State) {

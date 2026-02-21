@@ -1,20 +1,22 @@
-use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
-use ratatui::{Frame, widgets::StatefulWidget};
-
+pub mod foo;
 pub mod home;
 
-pub trait Page: StatefulWidget {
-    fn render(&self, frame: &mut Frame) -> Result<(), String>;
-    fn handle_key_event(
-        &self,
-        key_event: KeyEvent,
-    ) -> impl std::future::Future<Output = Result<(), String>>;
+use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
+use futures_util::{FutureExt, future::BoxFuture};
+use ratatui::{Frame, widgets::StatefulWidget};
 
-    fn _handle_key_event(
-        &self,
+pub trait Page: StatefulWidget + Send + Sync {
+    fn draw(&self, frame: &mut Frame) -> Result<(), String>;
+    fn handle_key_event(&self, key_event: KeyEvent) -> BoxFuture<Result<(), String>>;
+
+    fn _handle_key_event<'a>(
+        &'a self,
         key_event: KeyEvent,
-        exit: &mut bool,
-    ) -> impl std::future::Future<Output = Result<(), String>> {
+        exit: &'a mut bool,
+    ) -> BoxFuture<'a, Result<(), String>>
+    where
+        Self: Send + Sync + 'static,
+    {
         async move {
             if key_event.kind == KeyEventKind::Press
                 && key_event.modifiers == KeyModifiers::CONTROL
@@ -26,5 +28,6 @@ pub trait Page: StatefulWidget {
                 self.handle_key_event(key_event).await
             }
         }
+        .boxed()
     }
 }
