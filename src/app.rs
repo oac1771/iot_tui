@@ -8,7 +8,7 @@ use crate::{
 pub struct App;
 
 impl App {
-    pub fn run(terminal: &mut DefaultTerminal) -> std::io::Result<()> {
+    pub async fn run(terminal: &mut DefaultTerminal) -> std::io::Result<()> {
         let events_rx = event::init();
 
         let pages = [Box::new(HomePage::default())];
@@ -24,7 +24,7 @@ impl App {
             })?;
             let result = match events_rx.recv() {
                 Ok(Event::UserInput(key_event)) => {
-                    page.as_ref()._handle_key_event(key_event, &mut exit)
+                    page.as_ref()._handle_key_event(key_event, &mut exit).await
                 }
                 Err(_err) => Err("Error receiving crossterm event {err}".to_string()),
             };

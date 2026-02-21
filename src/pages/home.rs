@@ -142,34 +142,37 @@ impl Page for &HomePage {
         frame.render_stateful_widget(*self, frame.area(), &mut state);
         Ok(())
     }
-    fn handle_key_event(&self, key_event: KeyEvent) -> Result<(), String> {
-        let is_error = self
-            .state_client
-            .get_error()
-            .map_err(|err| err.to_string())?;
+    async fn handle_key_event(
+        &self,
+        key_event: KeyEvent,
+    ) -> Result<(), String> {
+            let is_error = self
+                .state_client
+                .get_error()
+                .map_err(|err| err.to_string())?;
 
-        if key_event.kind == KeyEventKind::Press && is_error.is_none() {
-            match key_event.code {
-                KeyCode::Char('s') => ScanCmd::handle(&self.state_client)?,
-                KeyCode::Up => self
-                    .state_client
-                    .update_scan_items_index(-1)
-                    .map_err(|err| err.to_string())?,
-                KeyCode::Down => self
-                    .state_client
-                    .update_scan_items_index(1)
-                    .map_err(|err| err.to_string())?,
-                _ => {}
+            if key_event.kind == KeyEventKind::Press && is_error.is_none() {
+                match key_event.code {
+                    KeyCode::Char('s') => ScanCmd::handle(&self.state_client).await?,
+                    KeyCode::Up => self
+                        .state_client
+                        .update_scan_items_index(-1)
+                        .map_err(|err| err.to_string())?,
+                    KeyCode::Down => self
+                        .state_client
+                        .update_scan_items_index(1)
+                        .map_err(|err| err.to_string())?,
+                    _ => {}
+                }
+            } else if key_event.kind == KeyEventKind::Press && is_error.is_some() {
+                if let KeyCode::Char('q') = key_event.code {
+                    self.state_client
+                        .update_error(None)
+                        .map_err(|err| err.to_string())?
+                }
             }
-        } else if key_event.kind == KeyEventKind::Press && is_error.is_some() {
-            if let KeyCode::Char('q') = key_event.code {
-                self.state_client
-                    .update_error(None)
-                    .map_err(|err| err.to_string())?
-            }
-        }
 
-        Ok(())
+            Ok(())
     }
 }
 

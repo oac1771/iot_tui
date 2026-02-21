@@ -6,6 +6,11 @@ mod state;
 
 use app::App;
 
-fn main() -> std::io::Result<()> {
-    ratatui::run(App::run)
+#[tokio::main]
+async fn main() {
+    let mut terminal = ratatui::init();
+    if let Err(err) = App::run(&mut terminal).await {
+        eprintln!("{err}")
+    };
+    ratatui::restore();
 }
