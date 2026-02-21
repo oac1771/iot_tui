@@ -3,6 +3,8 @@ use std::{
     thread,
 };
 
+use crate::util::evaluate_wrapping_index;
+
 #[derive(Default, Clone)]
 pub struct State {
     error: Option<String>,
@@ -63,8 +65,11 @@ impl State {
                     let scan_item_index = if len == 0 {
                         0
                     } else {
-                        ((state.scan_items.0 as isize + update as isize).rem_euclid(len as isize))
-                            as usize
+                        evaluate_wrapping_index(
+                            state.scan_items.0 as isize,
+                            update as isize,
+                            len as isize,
+                        )
                     };
                     state.scan_items.0 = scan_item_index;
 
