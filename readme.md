@@ -1,5 +1,5 @@
 tutorials: https://ratatui.rs/tutorials/
 
 todo:
-- Create scan command
-    creates random list to begin with
+- update instructions for cycling through apps and ctrl + c to quit
+- print central from scan command

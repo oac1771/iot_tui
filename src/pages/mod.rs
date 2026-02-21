@@ -1,4 +1,3 @@
-pub mod foo;
 pub mod home;
 
 use crate::app::AppState;
@@ -35,7 +34,7 @@ pub trait Page: StatefulWidget + Send + Sync {
                 && key_event.modifiers == KeyModifiers::SHIFT
                 && key_event.code == KeyCode::Left
             {
-                app_state.update_active_page(1);
+                app_state.update_active_page(-1);
                 Ok(())
             } else {
                 self.handle_key_event(key_event).await

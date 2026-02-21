@@ -113,7 +113,7 @@ impl HomePage {
             .title(Line::from("  Error!  ").bold().centered())
             .title_bottom(instructions.centered());
 
-        let popup_area = popup_area(area, 80, 80);
+        let popup_area = Self::popup_area(area, 80, 80);
 
         Clear::render(Clear, popup_area, buf);
         Paragraph::new(Line::raw(err))
@@ -125,14 +125,32 @@ impl HomePage {
 
         block.render(popup_area, buf);
     }
+
+    fn popup_area(area: Rect, percent_x: u16, percent_y: u16) -> Rect {
+        let vertical = Layout::vertical([Constraint::Percentage(percent_y)]).flex(Flex::Center);
+        let horizontal = Layout::horizontal([Constraint::Percentage(percent_x)]).flex(Flex::Center);
+        let [area] = vertical.areas(area);
+        let [area] = horizontal.areas(area);
+        area
+    }
 }
 
-fn popup_area(area: Rect, percent_x: u16, percent_y: u16) -> Rect {
-    let vertical = Layout::vertical([Constraint::Percentage(percent_y)]).flex(Flex::Center);
-    let horizontal = Layout::horizontal([Constraint::Percentage(percent_x)]).flex(Flex::Center);
-    let [area] = vertical.areas(area);
-    let [area] = horizontal.areas(area);
-    area
+impl StatefulWidget for HomePage {
+    type State = State;
+
+    fn render(self, area: Rect, buf: &mut Buffer, state: &mut Self::State) {
+        let layout = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints(vec![Constraint::Percentage(25), Constraint::Percentage(75)]);
+        let [title_area, data_area] = layout.areas(area);
+
+        self.render_title_area(title_area, buf);
+        self.render_data_area(data_area, buf, state);
+
+        if let Some(err) = state.get_error() {
+            self.render_error_popup(area, buf, err);
+        }
+    }
 }
 
 impl Page for HomePage {
@@ -178,23 +196,5 @@ impl Page for HomePage {
             Ok(())
         }
         .boxed()
-    }
-}
-
-impl StatefulWidget for HomePage {
-    type State = State;
-
-    fn render(self, area: Rect, buf: &mut Buffer, state: &mut Self::State) {
-        let layout = Layout::default()
-            .direction(Direction::Vertical)
-            .constraints(vec![Constraint::Percentage(25), Constraint::Percentage(75)]);
-        let [title_area, data_area] = layout.areas(area);
-
-        self.render_title_area(title_area, buf);
-        self.render_data_area(data_area, buf, state);
-
-        if let Some(err) = state.get_error() {
-            self.render_error_popup(area, buf, err);
-        }
     }
 }

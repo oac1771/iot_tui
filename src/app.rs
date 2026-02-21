@@ -2,7 +2,7 @@ use ratatui::DefaultTerminal;
 
 use crate::{
     event::{self, Event},
-    pages::{Page, foo, home::HomePage},
+    pages::{Page, home::HomePage},
     state::State,
     util::evaluate_wrapping_index,
 };
@@ -13,9 +13,8 @@ impl App {
     pub async fn run(terminal: &mut DefaultTerminal) -> std::io::Result<()> {
         let events_rx = event::init();
 
-        let pages: [Box<dyn Page<State = State>>; 2] = [
+        let pages: [Box<dyn Page<State = State>>; 1] = [
             Box::new(HomePage::default()),
-            Box::new(foo::FooPage::default()),
         ];
         let mut app_state = AppState::new(pages.len());
 
@@ -63,7 +62,7 @@ impl AppState {
         self.exit = exit;
     }
 
-    pub fn update_active_page(&mut self, update: usize) {
+    pub fn update_active_page(&mut self, update: i8) {
         self.active_page = evaluate_wrapping_index(
             self.active_page as isize,
             update as isize,
