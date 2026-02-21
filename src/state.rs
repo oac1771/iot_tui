@@ -3,9 +3,8 @@ use std::{
     thread,
 };
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct State {
-    exit: bool,
     error: Option<String>,
     scan_items: (usize, Vec<String>),
 }
@@ -17,11 +16,9 @@ pub struct StateClient {
 
 #[derive(Debug)]
 pub enum StateActions {
-    UpdateExit,
-    GetExit(SyncSender<bool>),
+    GetState(SyncSender<State>),
     UpdateScanItemsIndex(i8),
     UpdateScanItems(Vec<String>),
-    GetScanItems(SyncSender<(usize, Vec<String>)>),
     UpdateError(Option<String>),
     GetError(SyncSender<Option<String>>),
 }
@@ -50,19 +47,11 @@ impl State {
         &self.error
     }
 
-    pub fn get_exit(&self) -> bool {
-        self.exit
-    }
-
     fn handle_state_updates(state_update_rx: &Receiver<StateActions>, mut state: State) {
         while let Ok(action) = state_update_rx.recv() {
             let result = match action {
-                StateActions::UpdateExit => {
-                    state.exit = !state.exit;
-                    Ok(())
-                }
-                StateActions::GetExit(sender) => {
-                    if let Err(err) = sender.send(state.exit) {
+                StateActions::GetState(sender) => {
+                    if let Err(err) = sender.send(state.clone()) {
                         Err(err.to_string())
                     } else {
                         Ok(())
@@ -85,13 +74,6 @@ impl State {
                     state.scan_items.1 = scan_items;
 
                     Ok(())
-                }
-                StateActions::GetScanItems(sender) => {
-                    if let Err(err) = sender.send(state.scan_items.clone()) {
-                        Err(err.to_string())
-                    } else {
-                        Ok(())
-                    }
                 }
                 StateActions::UpdateError(err) => {
                     state.error = err;
@@ -118,17 +100,11 @@ impl StateClient {
         Self { state_update_tx }
     }
 
-    pub fn to_state(&self) -> Result<State, Error<StateActions>> {
-        Ok(State {
-            exit: self.get_exit()?,
-            scan_items: self.get_scan_items()?,
-            error: self.get_error()?,
-        })
-    }
-
-    pub fn update_exit(&self) -> Result<(), Error<StateActions>> {
-        self.state_update_tx.send(StateActions::UpdateExit)?;
-        Ok(())
+    pub fn get_state(&self) -> Result<State, Error<StateActions>> {
+        let (sender, receiver) = sync_channel(1);
+        self.state_update_tx.send(StateActions::GetState(sender))?;
+        let state = receiver.recv()?;
+        Ok(state)
     }
 
     pub fn update_scan_items_index(&self, update: i8) -> Result<(), Error<StateActions>> {
@@ -149,21 +125,6 @@ impl StateClient {
         self.state_update_tx.send(StateActions::UpdateError(err))?;
 
         Ok(())
-    }
-
-    pub fn get_exit(&self) -> Result<bool, Error<StateActions>> {
-        let (sender, receiver) = sync_channel(1);
-        self.state_update_tx.send(StateActions::GetExit(sender))?;
-        let exit = receiver.recv()?;
-        Ok(exit)
-    }
-
-    pub fn get_scan_items(&self) -> Result<(usize, Vec<String>), Error<StateActions>> {
-        let (sender, receiver) = sync_channel(1);
-        self.state_update_tx
-            .send(StateActions::GetScanItems(sender))?;
-        let scan_items = receiver.recv()?;
-        Ok(scan_items)
     }
 
     pub fn get_error(&self) -> Result<Option<String>, Error<StateActions>> {

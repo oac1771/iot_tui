@@ -1,10 +1,11 @@
+mod app;
 mod commands;
 mod event;
-mod page;
+mod pages;
 mod state;
 
-use page::Page;
+use app::App;
 
 fn main() -> std::io::Result<()> {
-    ratatui::run(|terminal| Page.run(terminal))
+    ratatui::run(App::run)
 }

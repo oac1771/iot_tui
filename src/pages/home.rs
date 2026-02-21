@@ -1,11 +1,12 @@
-use super::{
-    event::{self, Event},
+use crate::{
+    pages::Page,
     state::{self, State, StateClient},
 };
+
 use crate::commands::scan::ScanCmd;
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind};
 use ratatui::{
-    DefaultTerminal, Frame,
+    Frame,
     buffer::Buffer,
     layout::{Alignment, Constraint, Direction, Flex, Layout, Rect},
     style::{Style, Stylize},
@@ -13,72 +14,21 @@ use ratatui::{
     text::Line,
     widgets::{Block, Clear, List, ListItem, ListState, Paragraph, StatefulWidget, Widget, Wrap},
 };
-use std::io;
 
-pub struct Page;
+pub struct HomePage {
+    state_client: StateClient,
+}
 
-impl Page {
-    pub fn run(&mut self, terminal: &mut DefaultTerminal) -> io::Result<()> {
+impl Default for HomePage {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl HomePage {
+    pub fn new() -> Self {
         let state_client = state::init();
-        let events_rx = event::init(state_client.clone());
-
-        while state_client.get_exit().is_ok_and(|v| !v) {
-            terminal.draw(|frame| {
-                self.draw(frame, &state_client)
-                    .expect("Failure rendering terminal")
-            })?;
-
-            let result = match events_rx.recv() {
-                Ok(Event::UserInput(key_event)) => self
-                    .handle_key_event(key_event, &state_client)
-                    .map_err(|err| err.to_string()),
-                Err(err) => Err(err.to_string()),
-            };
-
-            if let Err(err) = result {
-                state_client
-                    .update_error(Some(err))
-                    .expect("Failure to update state with error")
-            }
-        }
-
-        Ok(())
-    }
-
-    fn handle_key_event(
-        &mut self,
-        key_event: KeyEvent,
-        state_client: &StateClient,
-    ) -> Result<(), String> {
-        let is_error = state_client.get_error().map_err(|err| err.to_string())?;
-
-        if key_event.kind == KeyEventKind::Press && is_error.is_none() {
-            match key_event.code {
-                KeyCode::Char('s') => ScanCmd::handle(state_client)?,
-                KeyCode::Esc => state_client.update_exit().map_err(|err| err.to_string())?,
-                KeyCode::Up => state_client
-                    .update_scan_items_index(-1)
-                    .map_err(|err| err.to_string())?,
-                KeyCode::Down => state_client
-                    .update_scan_items_index(1)
-                    .map_err(|err| err.to_string())?,
-                _ => {}
-            }
-        } else if key_event.kind == KeyEventKind::Press && is_error.is_some() {
-            if let KeyCode::Char('q') = key_event.code {
-                state_client
-                    .update_error(None)
-                    .map_err(|err| err.to_string())?
-            }
-        }
-
-        Ok(())
-    }
-
-    fn draw(&self, frame: &mut Frame, state_client: &StateClient) -> Result<(), String> {
-        let mut state = state_client.to_state().map_err(|err| err.to_string())?;
-        frame.render_stateful_widget(self, frame.area(), &mut state);
-        Ok(())
+        Self { state_client }
     }
 
     fn render_title_area(&self, area: Rect, buf: &mut Buffer) {
@@ -175,7 +125,55 @@ impl Page {
     }
 }
 
-impl StatefulWidget for &Page {
+fn popup_area(area: Rect, percent_x: u16, percent_y: u16) -> Rect {
+    let vertical = Layout::vertical([Constraint::Percentage(percent_y)]).flex(Flex::Center);
+    let horizontal = Layout::horizontal([Constraint::Percentage(percent_x)]).flex(Flex::Center);
+    let [area] = vertical.areas(area);
+    let [area] = horizontal.areas(area);
+    area
+}
+
+impl Page for HomePage {
+    fn render(&self, frame: &mut Frame) -> Result<(), String> {
+        let mut state = self
+            .state_client
+            .get_state()
+            .map_err(|err| err.to_string())?;
+        frame.render_stateful_widget(self, frame.area(), &mut state);
+        Ok(())
+    }
+    fn handle_key_event(&self, key_event: KeyEvent) -> Result<(), String> {
+        let is_error = self
+            .state_client
+            .get_error()
+            .map_err(|err| err.to_string())?;
+
+        if key_event.kind == KeyEventKind::Press && is_error.is_none() {
+            match key_event.code {
+                KeyCode::Char('s') => ScanCmd::handle(&self.state_client)?,
+                KeyCode::Up => self
+                    .state_client
+                    .update_scan_items_index(-1)
+                    .map_err(|err| err.to_string())?,
+                KeyCode::Down => self
+                    .state_client
+                    .update_scan_items_index(1)
+                    .map_err(|err| err.to_string())?,
+                _ => {}
+            }
+        } else if key_event.kind == KeyEventKind::Press && is_error.is_some() {
+            if let KeyCode::Char('q') = key_event.code {
+                self.state_client
+                    .update_error(None)
+                    .map_err(|err| err.to_string())?
+            }
+        }
+
+        Ok(())
+    }
+}
+
+impl StatefulWidget for &HomePage {
     type State = State;
 
     fn render(self, area: Rect, buf: &mut Buffer, state: &mut Self::State) {
@@ -191,12 +189,4 @@ impl StatefulWidget for &Page {
             self.render_error_popup(area, buf, err);
         }
     }
-}
-
-fn popup_area(area: Rect, percent_x: u16, percent_y: u16) -> Rect {
-    let vertical = Layout::vertical([Constraint::Percentage(percent_y)]).flex(Flex::Center);
-    let horizontal = Layout::horizontal([Constraint::Percentage(percent_x)]).flex(Flex::Center);
-    let [area] = vertical.areas(area);
-    let [area] = horizontal.areas(area);
-    area
 }

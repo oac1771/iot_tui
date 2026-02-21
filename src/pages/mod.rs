@@ -1,0 +1,20 @@
+use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
+use ratatui::Frame;
+
+pub mod home;
+
+pub trait Page {
+    fn render(&self, frame: &mut Frame) -> Result<(), String>;
+    fn handle_key_event(&self, key_event: KeyEvent) -> Result<(), String>;
+
+    fn _handle_key_event(&self, key_event: KeyEvent, exit: &mut bool) {
+        if key_event.kind == KeyEventKind::Press
+            && key_event.modifiers == KeyModifiers::CONTROL
+            && key_event.code == KeyCode::Char('c')
+        {
+            *exit = true
+        } else {
+            self.handle_key_event(key_event).unwrap();
+        }
+    }
+}

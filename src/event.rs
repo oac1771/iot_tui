@@ -4,20 +4,16 @@ use std::{
     thread,
 };
 
-use crate::state::StateClient;
-
 pub enum Event {
     UserInput(KeyEvent),
 }
 
-pub fn init(state_client: StateClient) -> Receiver<Event> {
+pub fn init() -> Receiver<Event> {
     let (events_tx, events_rx) = mpsc::channel::<Event>();
     thread::spawn(move || {
         loop {
             if let Err(err) = handle_input_events(&events_tx) {
-                state_client
-                    .update_error(Some(err.to_string()))
-                    .expect("Failure to update state with events error")
+                panic!("Error reading crossterm stream: {err}")
             }
         }
     });
