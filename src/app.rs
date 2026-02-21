@@ -17,9 +17,11 @@ impl App {
         let mut exit = false;
 
         while !exit {
-            terminal.draw(|frame| page.render(frame).unwrap())?;
+            terminal.draw(|frame| page.as_ref().render(frame).unwrap())?;
             match events_rx.recv() {
-                Ok(Event::UserInput(key_event)) => page._handle_key_event(key_event, &mut exit),
+                Ok(Event::UserInput(key_event)) => {
+                    page.as_ref()._handle_key_event(key_event, &mut exit)
+                }
                 Err(err) => panic!("Error receiving crossterm event {err}"),
             };
         }

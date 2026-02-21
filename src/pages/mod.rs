@@ -1,9 +1,9 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
-use ratatui::Frame;
+use ratatui::{Frame, widgets::StatefulWidget};
 
 pub mod home;
 
-pub trait Page {
+pub trait Page: StatefulWidget {
     fn render(&self, frame: &mut Frame) -> Result<(), String>;
     fn handle_key_event(&self, key_event: KeyEvent) -> Result<(), String>;
 

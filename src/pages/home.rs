@@ -133,13 +133,13 @@ fn popup_area(area: Rect, percent_x: u16, percent_y: u16) -> Rect {
     area
 }
 
-impl Page for HomePage {
+impl Page for &HomePage {
     fn render(&self, frame: &mut Frame) -> Result<(), String> {
         let mut state = self
             .state_client
             .get_state()
             .map_err(|err| err.to_string())?;
-        frame.render_stateful_widget(self, frame.area(), &mut state);
+        frame.render_stateful_widget(*self, frame.area(), &mut state);
         Ok(())
     }
     fn handle_key_event(&self, key_event: KeyEvent) -> Result<(), String> {
