@@ -7,7 +7,6 @@ use crate::commands::scan::ScanCmd;
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind};
 use futures_util::FutureExt;
 use ratatui::{
-    Frame,
     buffer::Buffer,
     layout::{Alignment, Constraint, Direction, Flex, Layout, Rect},
     style::{Style, Stylize},
@@ -154,14 +153,23 @@ impl StatefulWidget for HomePage {
 }
 
 impl Page for HomePage {
-    fn draw(&self, frame: &mut Frame) -> Result<(), String> {
-        let mut state = self
-            .state_client
-            .get_state()
-            .map_err(|err| err.to_string())?;
-        frame.render_stateful_widget(self.clone(), frame.area(), &mut state);
-        Ok(())
+    type State = State;
+
+    fn state<'a>(
+        &'a self,
+    ) -> futures_util::future::BoxFuture<'a, Result<<Self as Page>::State, String>> {
+        async {
+            let state = self
+                .state_client
+                .get_state()
+                .await
+                .map_err(|err| err.to_string())?;
+
+            Ok(state)
+        }
+        .boxed()
     }
+
     fn handle_key_event<'a>(
         &'a self,
         key_event: KeyEvent,

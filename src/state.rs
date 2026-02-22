@@ -92,10 +92,6 @@ impl State {
 }
 
 impl StateClient {
-    fn new(state_update_tx: Sender<StateActions>) -> Self {
-        Self { state_update_tx }
-    }
-
     pub async fn get_state(&self) -> Result<State, Error<StateActions>> {
         let (sender, receiver) = oneshot::channel();
         self.state_update_tx
