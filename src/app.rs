@@ -1,7 +1,7 @@
 use ratatui::DefaultTerminal;
-
+use crossterm::event::{Event as CrosstermEvent, EventStream};
+use futures_util::StreamExt;
 use crate::{
-    event::{self, Event},
     pages::{Page, home::HomePage},
     state::State,
     util::evaluate_wrapping_index,
@@ -11,7 +11,7 @@ pub struct App;
 
 impl App {
     pub async fn run(terminal: &mut DefaultTerminal) -> std::io::Result<()> {
-        let events_rx = event::init();
+        let mut reader = EventStream::new();
 
         let pages: [Box<dyn Page<State = State>>; 1] = [Box::new(HomePage::default())];
         let mut app_state = AppState::new(pages.len());
@@ -24,17 +24,14 @@ impl App {
                     panic!("{err}")
                 }
             })?;
-            let result = match events_rx.recv() {
-                Ok(Event::UserInput(key_event)) => {
-                    page.as_ref()
-                        ._handle_key_event(key_event, &mut app_state)
-                        .await
+            if let Some(Ok(event)) = reader.next().await {
+                if let CrosstermEvent::Key(key_event) = event {
+                    if let Err(err) =
+                        page._handle_key_event(key_event, &mut app_state).await
+                    {
+                        panic!("{err}");
+                    }
                 }
-                Err(_err) => Err("Error receiving crossterm event {err}".to_string()),
-            };
-
-            if let Err(err) = result {
-                panic!("{err}")
             }
         }
 

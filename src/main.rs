@@ -1,6 +1,5 @@
 mod app;
 mod commands;
-mod event;
 mod pages;
 mod state;
 mod util;

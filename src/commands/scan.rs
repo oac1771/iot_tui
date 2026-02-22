@@ -10,13 +10,13 @@ impl ScanCmd {
         let peripherals = central
             .peripheral_properties()
             .await
-            .unwrap()
-            .map(|p| p.local_name.unwrap())
+            .map_err(|err| err.to_string())?
+            .filter_map(|p| async { p.local_name })
             .take(5)
             .collect::<Vec<String>>()
             .await;
 
-        state_client.update_scan_items(peripherals).unwrap();
+        state_client.update_scan_items(peripherals).map_err(|err| err.to_string())?;
 
         Ok(())
     }
