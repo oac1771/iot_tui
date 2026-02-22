@@ -1,11 +1,10 @@
-use std::{
-    sync::mpsc::{self, Receiver, Sender, SyncSender, sync_channel},
-    thread,
+use crate::util::evaluate_wrapping_index;
+use tokio::sync::{
+    mpsc::{self, Receiver, Sender},
+    oneshot,
 };
 
-use crate::util::evaluate_wrapping_index;
-
-#[derive(Default, Clone)]
+#[derive(Default, Clone, Debug)]
 pub struct State {
     error: Option<String>,
     scan_items: (usize, Vec<String>),
@@ -18,25 +17,25 @@ pub struct StateClient {
 
 #[derive(Debug)]
 pub enum StateActions {
-    GetState(SyncSender<State>),
+    GetState(oneshot::Sender<State>),
     UpdateScanItemsIndex(i8),
     UpdateScanItems(Vec<String>),
     UpdateError(Option<String>),
-    GetError(SyncSender<Option<String>>),
+    GetError(oneshot::Sender<Option<String>>),
 }
 
 pub fn init() -> StateClient {
-    let (state_update_tx, state_update_rx) = mpsc::channel::<StateActions>();
-    let state_client = StateClient::new(state_update_tx);
+    let (tx, rx) = mpsc::channel::<StateActions>(32);
 
-    thread::spawn(move || {
+    tokio::spawn(async move {
         let state = State::default();
-        State::handle_state_updates(&state_update_rx, state);
+        State::handle_state_updates(rx, state).await;
     });
 
-    state_client
+    StateClient {
+        state_update_tx: tx,
+    }
 }
-
 impl State {
     pub fn get_scan_items(&self) -> (usize, impl Iterator<Item = &str>) {
         (
@@ -49,15 +48,11 @@ impl State {
         &self.error
     }
 
-    fn handle_state_updates(state_update_rx: &Receiver<StateActions>, mut state: State) {
-        while let Ok(action) = state_update_rx.recv() {
+    async fn handle_state_updates(mut state_update_rx: Receiver<StateActions>, mut state: State) {
+        while let Some(action) = state_update_rx.recv().await {
             let result = match action {
                 StateActions::GetState(sender) => {
-                    if let Err(err) = sender.send(state.clone()) {
-                        Err(err.to_string())
-                    } else {
-                        Ok(())
-                    }
+                    sender.send(state.clone()).map_err(|_| String::from(""))
                 }
                 StateActions::UpdateScanItemsIndex(update) => {
                     let len = state.scan_items.1.len();
@@ -84,13 +79,9 @@ impl State {
                     state.error = err;
                     Ok(())
                 }
-                StateActions::GetError(sender) => {
-                    if let Err(err) = sender.send(state.error.clone()) {
-                        Err(err.to_string())
-                    } else {
-                        Ok(())
-                    }
-                }
+                StateActions::GetError(sender) => sender
+                    .send(state.error.clone())
+                    .map_err(|_| String::from("")),
             };
 
             if let Err(err) = result {
@@ -105,37 +96,46 @@ impl StateClient {
         Self { state_update_tx }
     }
 
-    pub fn get_state(&self) -> Result<State, Error<StateActions>> {
-        let (sender, receiver) = sync_channel(1);
-        self.state_update_tx.send(StateActions::GetState(sender))?;
-        let state = receiver.recv()?;
+    pub async fn get_state(&self) -> Result<State, Error<StateActions>> {
+        let (sender, receiver) = oneshot::channel();
+        self.state_update_tx
+            .send(StateActions::GetState(sender))
+            .await?;
+        let state = receiver.await?;
         Ok(state)
     }
 
-    pub fn update_scan_items_index(&self, update: i8) -> Result<(), Error<StateActions>> {
+    pub async fn update_scan_items_index(&self, update: i8) -> Result<(), Error<StateActions>> {
         self.state_update_tx
-            .send(StateActions::UpdateScanItemsIndex(update))?;
-
+            .send(StateActions::UpdateScanItemsIndex(update))
+            .await?;
         Ok(())
     }
 
-    pub fn update_scan_items(&self, scan_items: Vec<String>) -> Result<(), Error<StateActions>> {
+    pub async fn update_scan_items(
+        &self,
+        scan_items: Vec<String>,
+    ) -> Result<(), Error<StateActions>> {
         self.state_update_tx
-            .send(StateActions::UpdateScanItems(scan_items))?;
+            .send(StateActions::UpdateScanItems(scan_items))
+            .await?;
+        Ok(())
+    }
+
+    pub async fn update_error(&self, err: Option<String>) -> Result<(), Error<StateActions>> {
+        self.state_update_tx
+            .send(StateActions::UpdateError(err))
+            .await?;
 
         Ok(())
     }
 
-    pub fn update_error(&self, err: Option<String>) -> Result<(), Error<StateActions>> {
-        self.state_update_tx.send(StateActions::UpdateError(err))?;
-
-        Ok(())
-    }
-
-    pub fn get_error(&self) -> Result<Option<String>, Error<StateActions>> {
-        let (sender, receiver) = sync_channel(1);
-        self.state_update_tx.send(StateActions::GetError(sender))?;
-        let error = receiver.recv()?;
+    pub async fn get_error(&self) -> Result<Option<String>, Error<StateActions>> {
+        let (sender, receiver) = oneshot::channel();
+        self.state_update_tx
+            .send(StateActions::GetError(sender))
+            .await?;
+        let error = receiver.await?;
         Ok(error)
     }
 }
@@ -145,11 +145,11 @@ pub enum Error<T> {
     #[error("{source}")]
     Send {
         #[from]
-        source: std::sync::mpsc::SendError<T>,
+        source: tokio::sync::mpsc::error::SendError<T>,
     },
     #[error("{source}")]
-    Recv {
+    OneshotRecv {
         #[from]
-        source: std::sync::mpsc::RecvError,
+        source: tokio::sync::oneshot::error::RecvError,
     },
 }

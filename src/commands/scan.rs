@@ -16,7 +16,10 @@ impl ScanCmd {
             .collect::<Vec<String>>()
             .await;
 
-        state_client.update_scan_items(peripherals).map_err(|err| err.to_string())?;
+        state_client
+            .update_scan_items(peripherals)
+            .await
+            .map_err(|err| err.to_string())?;
 
         Ok(())
     }

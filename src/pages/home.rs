@@ -170,6 +170,7 @@ impl Page for HomePage {
             let is_error = self
                 .state_client
                 .get_error()
+                .await
                 .map_err(|err| err.to_string())?;
 
             if key_event.kind == KeyEventKind::Press && is_error.is_none() {
@@ -178,10 +179,12 @@ impl Page for HomePage {
                     KeyCode::Up => self
                         .state_client
                         .update_scan_items_index(-1)
+                        .await
                         .map_err(|err| err.to_string())?,
                     KeyCode::Down => self
                         .state_client
                         .update_scan_items_index(1)
+                        .await
                         .map_err(|err| err.to_string())?,
                     _ => {}
                 }
@@ -189,6 +192,7 @@ impl Page for HomePage {
                 if let KeyCode::Char('q') = key_event.code {
                     self.state_client
                         .update_error(None)
+                        .await
                         .map_err(|err| err.to_string())?
                 }
             }

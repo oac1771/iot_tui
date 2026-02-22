@@ -1,11 +1,11 @@
-use ratatui::DefaultTerminal;
-use crossterm::event::{Event as CrosstermEvent, EventStream};
-use futures_util::StreamExt;
 use crate::{
     pages::{Page, home::HomePage},
     state::State,
     util::evaluate_wrapping_index,
 };
+use crossterm::event::{Event as CrosstermEvent, EventStream};
+use futures_util::StreamExt;
+use ratatui::DefaultTerminal;
 
 pub struct App;
 
@@ -26,9 +26,7 @@ impl App {
             })?;
             if let Some(Ok(event)) = reader.next().await {
                 if let CrosstermEvent::Key(key_event) = event {
-                    if let Err(err) =
-                        page._handle_key_event(key_event, &mut app_state).await
-                    {
+                    if let Err(err) = page._handle_key_event(key_event, &mut app_state).await {
                         panic!("{err}");
                     }
                 }
