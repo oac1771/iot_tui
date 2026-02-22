@@ -12,7 +12,7 @@ pub fn init() -> Receiver<Event> {
     let (events_tx, events_rx) = mpsc::channel::<Event>();
     thread::spawn(move || {
         loop {
-            if let Err(err) = handle_input_events(&events_tx) {
+            if let Err(err) = handle_cross_term_events(&events_tx) {
                 panic!("Error reading crossterm stream: {err}")
             }
         }
@@ -21,7 +21,7 @@ pub fn init() -> Receiver<Event> {
     events_rx
 }
 
-fn handle_input_events(events_tx: &Sender<Event>) -> Result<(), String> {
+fn handle_cross_term_events(events_tx: &Sender<Event>) -> Result<(), String> {
     match event::read() {
         Ok(CrosstermEvent::Key(key_event)) => {
             if let Err(err) = events_tx.send(Event::UserInput(key_event)) {

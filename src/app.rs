@@ -13,9 +13,7 @@ impl App {
     pub async fn run(terminal: &mut DefaultTerminal) -> std::io::Result<()> {
         let events_rx = event::init();
 
-        let pages: [Box<dyn Page<State = State>>; 1] = [
-            Box::new(HomePage::default()),
-        ];
+        let pages: [Box<dyn Page<State = State>>; 1] = [Box::new(HomePage::default())];
         let mut app_state = AppState::new(pages.len());
 
         while !app_state.exit {
