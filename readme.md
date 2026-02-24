@@ -1,8 +1,6 @@
 tutorials: https://ratatui.rs/tutorials/
 
 todo:
-- refactor
-    - change events channel to be async 
-    - std::thread inside tokio runtime?
-- update instructions for cycling through apps and ctrl + c to quit
-- print central from scan command
+- actually, maybe create new event stream that can be either crossterm key event or any other so we can update state?
+    - keeps terminal and drawing in one place
+- maybe create trait that encapsilates it?

@@ -42,10 +42,14 @@ impl App {
             if let Some(Ok(CrosstermEvent::Key(key_event))) = reader.next().await {
                 self.handle_key_event(&key_event);
 
-                match &mut self.active_page {
+                let result = match &mut self.active_page {
                     PageKind::Home => {
-                        self.home_page.handle_key_event(&key_event).await.unwrap();
+                        self.home_page.handle_key_event(&key_event).await
                     }
+                };
+
+                if let Err(err) = result {
+                    panic!("Error: {err}")
                 }
             }
         }
