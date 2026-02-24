@@ -1,11 +1,7 @@
-use crate::{
-    pages::Page,
-    state::{self, State, StateClient},
-};
+use crate::state::State;
 
 use crate::commands::scan::ScanCmd;
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind};
-use futures_util::FutureExt;
 use ratatui::{
     buffer::Buffer,
     layout::{Alignment, Constraint, Direction, Flex, Layout, Rect},
@@ -17,7 +13,7 @@ use ratatui::{
 
 #[derive(Clone)]
 pub struct HomePage {
-    state_client: StateClient,
+    pub state: State,
 }
 
 impl Default for HomePage {
@@ -28,8 +24,28 @@ impl Default for HomePage {
 
 impl HomePage {
     pub fn new() -> Self {
-        let state_client = state::init();
-        Self { state_client }
+        Self {
+            state: State::default(),
+        }
+    }
+
+    pub async fn handle_key_event(&mut self, key_event: &KeyEvent) -> Result<(), String> {
+        let is_error = self.state.get_error();
+
+        if key_event.kind == KeyEventKind::Press && is_error.is_none() {
+            match key_event.code {
+                KeyCode::Char('s') => ScanCmd::handle(&mut self.state).await?,
+                KeyCode::Up => self.state.update_scan_items_index(-1),
+                KeyCode::Down => self.state.update_scan_items_index(1),
+                _ => {}
+            }
+        } else if key_event.kind == KeyEventKind::Press && is_error.is_some() {
+            if let KeyCode::Char('q') = key_event.code {
+                self.state.update_error(None)
+            }
+        }
+
+        Ok(())
     }
 
     fn render_title_area(&self, area: Rect, buf: &mut Buffer) {
@@ -68,7 +84,7 @@ impl HomePage {
             .render(cmd_area, buf);
     }
 
-    fn render_data_area(&self, area: Rect, buf: &mut Buffer, state: &mut State) {
+    fn render_data_area(&self, area: Rect, buf: &mut Buffer) {
         let layout = Layout::default()
             .direction(Direction::Horizontal)
             .constraints(vec![Constraint::Percentage(20), Constraint::Percentage(80)]);
@@ -84,7 +100,7 @@ impl HomePage {
             .title(Line::from(" ***** ").bold().centered())
             .border_set(border::DOUBLE);
 
-        let (scan_items_index, scan_items) = state.get_scan_items();
+        let (scan_items_index, scan_items) = self.state.get_scan_items();
 
         let scan_list: Vec<ListItem> = scan_items
             .map(|s| ListItem::new(Line::from(s).alignment(Alignment::Left)))
@@ -134,79 +150,18 @@ impl HomePage {
     }
 }
 
-impl StatefulWidget for HomePage {
-    type State = State;
-
-    fn render(self, area: Rect, buf: &mut Buffer, state: &mut Self::State) {
+impl Widget for &HomePage {
+    fn render(self, area: Rect, buf: &mut Buffer) {
         let layout = Layout::default()
             .direction(Direction::Vertical)
             .constraints(vec![Constraint::Percentage(25), Constraint::Percentage(75)]);
         let [title_area, data_area] = layout.areas(area);
 
         self.render_title_area(title_area, buf);
-        self.render_data_area(data_area, buf, state);
+        self.render_data_area(data_area, buf);
 
-        if let Some(err) = state.get_error() {
+        if let Some(err) = self.state.get_error() {
             self.render_error_popup(area, buf, err);
         }
-    }
-}
-
-impl Page for HomePage {
-    type State = State;
-
-    fn state<'a>(
-        &'a self,
-    ) -> futures_util::future::BoxFuture<'a, Result<<Self as Page>::State, String>> {
-        async {
-            let state = self
-                .state_client
-                .get_state()
-                .await
-                .map_err(|err| err.to_string())?;
-
-            Ok(state)
-        }
-        .boxed()
-    }
-
-    fn handle_key_event<'a>(
-        &'a self,
-        key_event: KeyEvent,
-    ) -> futures_util::future::BoxFuture<'a, Result<(), String>> {
-        async move {
-            let is_error = self
-                .state_client
-                .get_error()
-                .await
-                .map_err(|err| err.to_string())?;
-
-            if key_event.kind == KeyEventKind::Press && is_error.is_none() {
-                match key_event.code {
-                    KeyCode::Char('s') => ScanCmd::handle(&self.state_client).await?,
-                    KeyCode::Up => self
-                        .state_client
-                        .update_scan_items_index(-1)
-                        .await
-                        .map_err(|err| err.to_string())?,
-                    KeyCode::Down => self
-                        .state_client
-                        .update_scan_items_index(1)
-                        .await
-                        .map_err(|err| err.to_string())?,
-                    _ => {}
-                }
-            } else if key_event.kind == KeyEventKind::Press && is_error.is_some() {
-                if let KeyCode::Char('q') = key_event.code {
-                    self.state_client
-                        .update_error(None)
-                        .await
-                        .map_err(|err| err.to_string())?
-                }
-            }
-
-            Ok(())
-        }
-        .boxed()
     }
 }

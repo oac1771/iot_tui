@@ -1,37 +1,51 @@
-use crate::pages::{Page as PageT, home::HomePage};
+use crate::pages::home::HomePage;
 use crossterm::event::{
     Event as CrosstermEvent, EventStream, KeyCode, KeyEvent, KeyEventKind, KeyModifiers,
 };
 use futures_util::StreamExt;
 use ratatui::DefaultTerminal;
 
-pub struct App<H: PageT> {
-    home_page: H,
+pub struct App {
+    home_page: HomePage,
+    active_page: PageKind,
+    exit: bool,
 }
 
-impl App<HomePage> {
-    pub fn new() -> App<HomePage> {
+#[derive(Copy, Clone)]
+enum PageKind {
+    Home,
+}
+
+impl App {
+    pub fn new() -> Self {
         Self {
             home_page: HomePage::default(),
+            active_page: PageKind::Home,
+            exit: false,
         }
     }
 
-    pub async fn run(self, terminal: &mut DefaultTerminal) -> std::io::Result<()> {
+    pub async fn run(mut self, terminal: &mut DefaultTerminal) -> std::io::Result<()> {
         let mut reader = EventStream::new();
-        let mut app_state = AppState::new();
 
-        while !app_state.exit {
-            let page = self.page(&app_state);
-            let mut state = page.state().await.unwrap();
-
+        while !self.exit {
             terminal.draw(|frame| {
-                frame.render_stateful_widget(page.clone(), frame.area(), &mut state);
+                let area = frame.area();
+
+                match &self.active_page {
+                    PageKind::Home => {
+                        frame.render_widget(&self.home_page, area);
+                    }
+                }
             })?;
 
-            if let Some(Ok(event)) = reader.next().await {
-                if let CrosstermEvent::Key(key_event) = event {
-                    app_state.handle_key_event(key_event);
-                    page.handle_key_event(key_event).await.unwrap();
+            if let Some(Ok(CrosstermEvent::Key(key_event))) = reader.next().await {
+                self.handle_key_event(&key_event);
+
+                match &mut self.active_page {
+                    PageKind::Home => {
+                        self.home_page.handle_key_event(&key_event).await.unwrap();
+                    }
                 }
             }
         }
@@ -39,53 +53,12 @@ impl App<HomePage> {
         Ok(())
     }
 
-    fn page(&self, app_state: &AppState) -> &HomePage {
-        match app_state.active_page {
-            Page::Home => &self.home_page,
-        }
-    }
-}
-
-pub struct AppState {
-    exit: bool,
-    active_page: Page,
-}
-
-enum Page {
-    Home,
-}
-
-impl AppState {
-    pub fn new() -> Self {
-        Self {
-            exit: false,
-            active_page: Page::Home,
-        }
-    }
-    pub fn update_exit(&mut self, exit: bool) {
-        self.exit = exit;
-    }
-
-    pub fn update_active_page(&mut self) {
-        self.active_page = Page::Home
-    }
-
-    fn handle_key_event(&mut self, key_event: KeyEvent) {
+    fn handle_key_event(&mut self, key_event: &KeyEvent) {
         if key_event.kind == KeyEventKind::Press
             && key_event.modifiers == KeyModifiers::CONTROL
             && key_event.code == KeyCode::Char('c')
         {
-            self.update_exit(true);
-        } else if key_event.kind == KeyEventKind::Press
-            && key_event.modifiers == KeyModifiers::SHIFT
-            && key_event.code == KeyCode::Right
-        {
-            self.update_active_page();
-        } else if key_event.kind == KeyEventKind::Press
-            && key_event.modifiers == KeyModifiers::SHIFT
-            && key_event.code == KeyCode::Left
-        {
-            self.update_active_page();
+            self.exit = true;
         }
     }
 }
