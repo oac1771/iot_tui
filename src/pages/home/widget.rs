@@ -15,6 +15,7 @@ use tokio::sync::mpsc::Sender;
 #[derive(Clone)]
 pub struct HomePage {
     state: State,
+    error: Option<String>,
     home_page_event_tx: Sender<HomePageEvent>,
 }
 
@@ -28,23 +29,22 @@ impl HomePage {
     pub fn new(home_page_event_tx: Sender<HomePageEvent>) -> Self {
         Self {
             state: State::default(),
+            error: None,
             home_page_event_tx,
         }
     }
 
     pub async fn handle_key_event(&mut self, key_event: &KeyEvent) -> Result<(), String> {
-        let is_error = self.state.get_error();
-
-        if key_event.kind == KeyEventKind::Press && is_error.is_none() {
+        if key_event.kind == KeyEventKind::Press && self.error.is_none() {
             match key_event.code {
                 KeyCode::Char('s') => self.scan().await?,
                 KeyCode::Up => self.state.update_scan_items_index(-1),
                 KeyCode::Down => self.state.update_scan_items_index(1),
                 _ => {}
             }
-        } else if key_event.kind == KeyEventKind::Press && is_error.is_some() {
+        } else if key_event.kind == KeyEventKind::Press && self.error.is_some() {
             if let KeyCode::Char('q') = key_event.code {
-                self.state.update_error(None)
+                self.error = None
             }
         }
 
@@ -66,7 +66,7 @@ impl HomePage {
                 self.state.update_scan_items(scan_items);
             }
             HomePageEvent::Error(err) => {
-                self.state.update_error(Some(err));
+                self.error = Some(err);
             }
         }
         Ok(())
@@ -184,7 +184,7 @@ impl Widget for &HomePage {
         self.render_title_area(title_area, buf);
         self.render_data_area(data_area, buf);
 
-        if let Some(err) = self.state.get_error() {
+        if let Some(err) = &self.error {
             self.render_error_popup(area, buf, err);
         }
     }
