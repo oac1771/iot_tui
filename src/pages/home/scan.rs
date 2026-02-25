@@ -31,14 +31,12 @@ impl ScanCmd {
             }
             .await;
 
-            match result {
-                Ok(peripherals) => {
-                    let _ = tx.send(HomePageEvent::Complete(peripherals)).await;
-                }
-                Err(err) => {
-                    let _ = tx.send(HomePageEvent::Error(err)).await;
-                }
-            }
+            let event = match result {
+                Ok(peripherals) => HomePageEvent::Complete(peripherals),
+                Err(err) => HomePageEvent::Error(err),
+            };
+
+            let _ = tx.send(event).await;
         });
 
         Ok(())

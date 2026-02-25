@@ -50,7 +50,9 @@ impl App {
             let result = select! {
                 key_event = reader.next() => {
                     if let Some(Ok(CrosstermEvent::Key(key_event))) = key_event {
+
                         self.handle_key_event(&key_event);
+
                         match &mut self.active_page {
                             PageKind::Home => {
                                 self.home_page.handle_key_event(&key_event).await
