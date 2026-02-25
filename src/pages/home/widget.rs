@@ -1,6 +1,6 @@
-use crate::state::State;
+use super::state::State;
 
-use crate::commands::scan::ScanCmd;
+use super::scan::ScanCmd;
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind};
 use ratatui::{
     buffer::Buffer,
@@ -10,22 +10,25 @@ use ratatui::{
     text::Line,
     widgets::{Block, Clear, List, ListItem, ListState, Paragraph, StatefulWidget, Widget, Wrap},
 };
+use tokio::sync::mpsc::Sender;
 
 #[derive(Clone)]
 pub struct HomePage {
-    pub state: State,
+    state: State,
+    home_page_event_tx: Sender<HomePageEvent>,
 }
 
-impl Default for HomePage {
-    fn default() -> Self {
-        Self::new()
-    }
+pub enum HomePageEvent {
+    Pending,
+    Complete(Vec<String>),
+    Error(String),
 }
 
 impl HomePage {
-    pub fn new() -> Self {
+    pub fn new(home_page_event_tx: Sender<HomePageEvent>) -> Self {
         Self {
             state: State::default(),
+            home_page_event_tx,
         }
     }
 
@@ -34,7 +37,7 @@ impl HomePage {
 
         if key_event.kind == KeyEventKind::Press && is_error.is_none() {
             match key_event.code {
-                KeyCode::Char('s') => ScanCmd::handle(&mut self.state).await?,
+                KeyCode::Char('s') => self.scan().await?,
                 KeyCode::Up => self.state.update_scan_items_index(-1),
                 KeyCode::Down => self.state.update_scan_items_index(1),
                 _ => {}
@@ -45,6 +48,27 @@ impl HomePage {
             }
         }
 
+        Ok(())
+    }
+
+    async fn scan(&self) -> Result<(), String> {
+        ScanCmd::handle(&self.home_page_event_tx).await?;
+        Ok(())
+    }
+
+    pub async fn handle_home_page_event(
+        &mut self,
+        home_page_event: HomePageEvent,
+    ) -> Result<(), String> {
+        match home_page_event {
+            HomePageEvent::Pending => {}
+            HomePageEvent::Complete(scan_items) => {
+                self.state.update_scan_items(scan_items);
+            }
+            HomePageEvent::Error(err) => {
+                self.state.update_error(Some(err));
+            }
+        }
         Ok(())
     }
 
