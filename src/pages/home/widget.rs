@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use crate::utils::spinner::Spinner;
 
 use super::{scan::ScanCmd, state::State};
@@ -21,7 +23,7 @@ pub struct HomePage {
 
 pub enum HomePageEvent {
     Pending,
-    Complete(Vec<String>),
+    Complete(HashSet<(String, String)>),
     Error(String),
 }
 
@@ -58,11 +60,8 @@ impl HomePage {
         Ok(())
     }
 
-    pub async fn handle_home_page_event(
-        &mut self,
-        home_page_event: HomePageEvent,
-    ) -> Result<(), String> {
-        match home_page_event {
+    pub async fn handle_page_event(&mut self, event: HomePageEvent) -> Result<(), String> {
+        match event {
             HomePageEvent::Pending => self.scan_spinner = Some(Spinner::default()),
             HomePageEvent::Complete(scan_items) => {
                 self.scan_spinner = None;
@@ -87,10 +86,7 @@ impl HomePage {
 
         let [cmd_area, meta_data_area] = layout.areas(area);
 
-        let instructions = Line::from(vec![
-            " Quit ".into(),
-            "<Ctrl + c> ".blue().bold(),
-        ]);
+        let instructions = Line::from(vec![" Quit ".into(), "<Ctrl + c> ".blue().bold()]);
 
         let cmd_block = Block::bordered()
             .title(Line::from("  ****  ").bold().centered())
@@ -155,7 +151,7 @@ impl HomePage {
             let (scan_items_index, scan_items) = self.state.get_scan_items();
 
             let scan_list: Vec<ListItem> = scan_items
-                .map(|s| ListItem::new(Line::from(s).alignment(Alignment::Left)))
+                .map(|s| ListItem::new(Line::from(s.0).alignment(Alignment::Left)))
                 .collect();
 
             let mut scan_list_state = ListState::default();
@@ -165,8 +161,7 @@ impl HomePage {
                 List::new(scan_list)
                     .block(list_block)
                     .highlight_symbol(">> ")
-                    .highlight_style(Style::new().bold())
-                    .repeat_highlight_symbol(true),
+                    .highlight_style(Style::new().bold()),
                 list_area,
                 buf,
                 &mut scan_list_state,

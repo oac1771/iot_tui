@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use crate::pages::home::HomePageEvent;
 use futures_util::StreamExt;
 use iot_sdk::central::Central;
@@ -22,9 +24,14 @@ impl ScanCmd {
                     .peripheral_properties()
                     .await
                     .map_err(|e| e.to_string())?
-                    .filter_map(|p| async { p.local_name })
+                    .filter_map(|p| async move {
+                        match p.local_name {
+                            Some(local_name) => Some((local_name, p.address.to_string())),
+                            None => None,
+                        }
+                    })
                     .take(5)
-                    .collect::<Vec<String>>()
+                    .collect::<HashSet<(String, String)>>()
                     .await;
 
                 Ok(peripherals)

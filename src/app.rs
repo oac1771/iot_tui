@@ -58,6 +58,7 @@ impl App {
                         }
                     }
                 }
+
                 key_event = reader.next() => {
                     if let Some(Ok(CrosstermEvent::Key(key_event))) = key_event {
 
@@ -73,13 +74,9 @@ impl App {
                     }
 
                 }
-                Some(home_page_event) = self.home_page_event_rx.recv() => {
-                    match &mut self.active_page {
-                        PageKind::Home => {
-                            self.home_page.handle_home_page_event(home_page_event).await
-                        }
-                    }
-                }
+
+                Some(event) = self.home_page_event_rx.recv() => self.home_page.handle_page_event(event).await
+
             };
 
             if let Err(err) = result {

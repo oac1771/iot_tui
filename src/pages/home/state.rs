@@ -1,18 +1,23 @@
+use std::collections::HashSet;
+
 use crate::utils::evaluate_wrapping_index;
 
 #[derive(Default, Clone, Debug)]
 pub struct State {
-    scan_items: (usize, Vec<String>),
+    scan_items: (usize, HashSet<(String, String)>),
 }
 
 impl State {
-    pub fn get_scan_items(&self) -> (usize, impl Iterator<Item = &str>) {
+    pub fn get_scan_items(&self) -> (usize, impl Iterator<Item = (&str, &str)>) {
         (
             self.scan_items.0,
-            self.scan_items.1.iter().map(|i| i.as_str()),
+            self.scan_items
+                .1
+                .iter()
+                .map(|i| (i.0.as_str(), i.1.as_str())),
         )
     }
-    pub fn update_scan_items(&mut self, scan_items: Vec<String>) {
+    pub fn update_scan_items(&mut self, scan_items: HashSet<(String, String)>) {
         self.scan_items.1 = scan_items
     }
 
