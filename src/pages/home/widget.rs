@@ -88,12 +88,8 @@ impl HomePage {
         let [cmd_area, meta_data_area] = layout.areas(area);
 
         let instructions = Line::from(vec![
-            " Down ".into(),
-            "<Down>".blue().bold(),
-            " Up ".into(),
-            "<Up>".blue().bold(),
             " Quit ".into(),
-            "<Esc> ".blue().bold(),
+            "<Ctrl + c> ".blue().bold(),
         ]);
 
         let cmd_block = Block::bordered()
@@ -132,13 +128,29 @@ impl HomePage {
             .title(Line::from(" ***** ").bold().centered())
             .border_set(border::DOUBLE);
 
+        list_block.clone().render(list_area, buf);
+
+        let inner = list_block.inner(list_area);
+
         if let Some(scan_spinner) = &self.scan_spinner {
-            let frame = scan_spinner.frame();
-            Paragraph::new(Line::raw(frame))
-                .block(list_block.clone())
-                .centered()
-                .wrap(Wrap { trim: true })
-                .render(list_area, buf);
+            let layout = Layout::default()
+                .direction(Direction::Vertical)
+                .constraints([
+                    Constraint::Percentage(50),
+                    Constraint::Length(3), // height of spinner section
+                    Constraint::Percentage(50),
+                ])
+                .split(inner);
+
+            let center_area = layout[1];
+
+            let paragraph = Paragraph::new(vec![
+                Line::raw("Scanning..."),
+                Line::from(scan_spinner.frame()).bold(),
+            ])
+            .alignment(Alignment::Center);
+
+            paragraph.render(center_area, buf);
         } else {
             let (scan_items_index, scan_items) = self.state.get_scan_items();
 

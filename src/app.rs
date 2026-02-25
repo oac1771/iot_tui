@@ -36,7 +36,7 @@ impl App {
 
     pub async fn run(mut self, terminal: &mut DefaultTerminal) -> std::io::Result<()> {
         let mut reader = EventStream::new();
-        let mut tick = time::interval(Duration::from_millis(100));
+        let mut tick = time::interval(Duration::from_millis(50));
 
         while !self.exit {
             terminal.draw(|frame| {
