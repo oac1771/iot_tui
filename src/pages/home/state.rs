@@ -1,4 +1,4 @@
-use crate::util::evaluate_wrapping_index;
+use crate::utils::evaluate_wrapping_index;
 
 #[derive(Default, Clone, Debug)]
 pub struct State {

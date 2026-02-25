@@ -7,6 +7,7 @@ use ratatui::DefaultTerminal;
 use tokio::{
     select,
     sync::mpsc::{self, Receiver},
+    time::{self, Duration},
 };
 
 pub struct App {
@@ -35,6 +36,7 @@ impl App {
 
     pub async fn run(mut self, terminal: &mut DefaultTerminal) -> std::io::Result<()> {
         let mut reader = EventStream::new();
+        let mut tick = time::interval(Duration::from_millis(100));
 
         while !self.exit {
             terminal.draw(|frame| {
@@ -48,6 +50,14 @@ impl App {
             })?;
 
             let result = select! {
+                _ = tick.tick() => {
+                    match &mut self.active_page {
+                        PageKind::Home => {
+                            self.home_page.tick().await;
+                            Ok(())
+                        }
+                    }
+                }
                 key_event = reader.next() => {
                     if let Some(Ok(CrosstermEvent::Key(key_event))) = key_event {
 

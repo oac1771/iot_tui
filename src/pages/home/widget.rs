@@ -1,6 +1,6 @@
-use super::state::State;
+use crate::utils::spinner::Spinner;
 
-use super::scan::ScanCmd;
+use super::{scan::ScanCmd, state::State};
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind};
 use ratatui::{
     buffer::Buffer,
@@ -12,11 +12,10 @@ use ratatui::{
 };
 use tokio::sync::mpsc::Sender;
 
-#[derive(Clone)]
 pub struct HomePage {
     state: State,
     error: Option<String>,
-    is_scanning: bool,
+    scan_spinner: Option<Spinner>,
     home_page_event_tx: Sender<HomePageEvent>,
 }
 
@@ -31,8 +30,14 @@ impl HomePage {
         Self {
             state: State::default(),
             error: None,
-            is_scanning: false,
+            scan_spinner: None,
             home_page_event_tx,
+        }
+    }
+
+    pub async fn tick(&mut self) {
+        if let Some(spinner) = &mut self.scan_spinner {
+            spinner.tick();
         }
     }
 
@@ -58,9 +63,9 @@ impl HomePage {
         home_page_event: HomePageEvent,
     ) -> Result<(), String> {
         match home_page_event {
-            HomePageEvent::Pending => self.is_scanning = true,
+            HomePageEvent::Pending => self.scan_spinner = Some(Spinner::default()),
             HomePageEvent::Complete(scan_items) => {
-                self.is_scanning = false;
+                self.scan_spinner = None;
                 self.state.update_scan_items(scan_items);
             }
             HomePageEvent::Error(err) => {
@@ -127,7 +132,14 @@ impl HomePage {
             .title(Line::from(" ***** ").bold().centered())
             .border_set(border::DOUBLE);
 
-        if !self.is_scanning {
+        if let Some(scan_spinner) = &self.scan_spinner {
+            let frame = scan_spinner.frame();
+            Paragraph::new(Line::raw(frame))
+                .block(list_block.clone())
+                .centered()
+                .wrap(Wrap { trim: true })
+                .render(list_area, buf);
+        } else {
             let (scan_items_index, scan_items) = self.state.get_scan_items();
 
             let scan_list: Vec<ListItem> = scan_items
@@ -147,12 +159,6 @@ impl HomePage {
                 buf,
                 &mut scan_list_state,
             );
-        } else {
-            Paragraph::new(Line::raw("Scanningggggggg"))
-                .block(list_block.clone())
-                .centered()
-                .wrap(Wrap { trim: true })
-                .render(list_area, buf);
         }
     }
 

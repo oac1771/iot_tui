@@ -1,6 +1,6 @@
 mod app;
 mod pages;
-mod util;
+mod utils;
 
 use app::App;
 
