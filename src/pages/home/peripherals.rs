@@ -1,4 +1,4 @@
-use crate::pages::home::{HomePageEvent, PheripheralScanItems};
+use crate::pages::home::HomePageEvent;
 use futures_util::StreamExt;
 use iot_sdk::{Peripheral, central::Central};
 use tokio::sync::mpsc::Sender;
@@ -22,16 +22,9 @@ impl Peripherals {
                     .peripheral_properties()
                     .await
                     .map_err(|e| e.to_string())?
-                    .filter_map(|p| async move {
-                        match p.local_name {
-                            Some(local_name) => {
-                                Some(PheripheralScanItems::new(local_name, p.address.to_string()))
-                            }
-                            None => None,
-                        }
-                    })
+                    .filter_map(|p| async move { p.local_name })
                     .take(5)
-                    .collect::<Vec<PheripheralScanItems>>()
+                    .collect::<Vec<String>>()
                     .await;
 
                 Ok(peripherals)
@@ -69,7 +62,11 @@ impl Peripherals {
                     .await
                     .map_err(|e| e.to_string())?;
 
-                let characteristics = peripheral.characteristics().iter().map(|c|c.to_string()).collect::<Vec<String>>();
+                let characteristics = peripheral
+                    .characteristics()
+                    .iter()
+                    .map(|c| c.to_string())
+                    .collect::<Vec<String>>();
 
                 Ok(characteristics)
             }
