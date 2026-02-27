@@ -1,8 +1,6 @@
-use std::collections::HashSet;
-
 use crate::utils::spinner::Spinner;
 
-use super::{scan::ScanCmd, state::State};
+use super::{PheripheralScanItems, State, peripherals::Peripherals};
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind};
 use ratatui::{
     buffer::Buffer,
@@ -18,13 +16,17 @@ pub struct HomePage {
     state: State,
     error: Option<String>,
     scan_spinner: Option<Spinner>,
+    characteristic_spinner: Option<Spinner>,
     home_page_event_tx: Sender<HomePageEvent>,
 }
 
 pub enum HomePageEvent {
-    Pending,
-    Complete(HashSet<(String, String)>),
-    Error(String),
+    PeripheralScanPending,
+    PeripheralScanComplete(Vec<PheripheralScanItems>),
+    PeripheralScanError(String),
+    CharacteristicScanPending,
+    CharacteristicScanComplete(Vec<String>),
+    CharacteristicScanError(String)
 }
 
 impl HomePage {
@@ -33,6 +35,7 @@ impl HomePage {
             state: State::default(),
             error: None,
             scan_spinner: None,
+            characteristic_spinner: None,
             home_page_event_tx,
         }
     }
@@ -46,14 +49,21 @@ impl HomePage {
     pub async fn handle_key_event(&mut self, key_event: &KeyEvent) -> Result<(), String> {
         if key_event.kind == KeyEventKind::Press && self.error.is_none() {
             match key_event.code {
-                KeyCode::Char('s') => self.scan().await?,
-                KeyCode::Up => self.state.update_scan_items_index(-1),
-                KeyCode::Down => self.state.update_scan_items_index(1),
+                KeyCode::Char('s') => self.get_peripherals().await?,
+                KeyCode::Up => self.state.update_peripherals_index(-1),
+                KeyCode::Down => self.state.update_peripherals_index(1),
                 _ => {}
             }
         } else if key_event.kind == KeyEventKind::Press && self.error.is_some() {
             if let KeyCode::Char('q') = key_event.code {
                 self.error = None
+            }
+        } else if key_event.kind == KeyEventKind::Press && !self.state.get_peripherals().1.is_empty()
+        {
+            if let KeyCode::Enter = key_event.code {
+                let peripherals = self.state.get_peripherals();
+                let local_name = &peripherals.1[peripherals.0].local_name();
+                self.get_characteristics(local_name).await?
             }
         }
 
@@ -62,20 +72,33 @@ impl HomePage {
 
     pub async fn handle_page_event(&mut self, event: HomePageEvent) -> Result<(), String> {
         match event {
-            HomePageEvent::Pending => self.scan_spinner = Some(Spinner::default()),
-            HomePageEvent::Complete(scan_items) => {
+            HomePageEvent::PeripheralScanPending => self.scan_spinner = Some(Spinner::default()),
+            HomePageEvent::PeripheralScanComplete(peripherals) => {
                 self.scan_spinner = None;
-                self.state.update_scan_items(scan_items);
+                self.state.update_peripherals(peripherals);
             }
-            HomePageEvent::Error(err) => {
+            HomePageEvent::PeripheralScanError(err) => {
                 self.error = Some(err);
+            }
+            HomePageEvent::CharacteristicScanPending => self.characteristic_spinner = Some(Spinner::default()),
+            HomePageEvent::CharacteristicScanComplete(_characteristics) => {
+                self.characteristic_spinner = None;
+                // self.state.
+            }
+            HomePageEvent::CharacteristicScanError(err) => {
+                self.error = Some(err)
             }
         }
         Ok(())
     }
 
-    async fn scan(&self) -> Result<(), String> {
-        ScanCmd::handle(&self.home_page_event_tx).await?;
+    async fn get_peripherals(&self) -> Result<(), String> {
+        Peripherals::get_peripherals(&self.home_page_event_tx).await?;
+        Ok(())
+    }
+
+    async fn get_characteristics(&self, local_name: &str) -> Result<(), String> {
+        Peripherals::get_characteristics(&self.home_page_event_tx, local_name).await?;
         Ok(())
     }
 
@@ -148,14 +171,15 @@ impl HomePage {
 
             paragraph.render(center_area, buf);
         } else {
-            let (scan_items_index, scan_items) = self.state.get_scan_items();
+            let (peripherals_index, peripherals) = self.state.get_peripherals();
 
-            let scan_list: Vec<ListItem> = scan_items
-                .map(|s| ListItem::new(Line::from(s.0).alignment(Alignment::Left)))
+            let scan_list: Vec<ListItem> = peripherals
+                .iter()
+                .map(|p| ListItem::new(Line::from(p.local_name()).alignment(Alignment::Left)))
                 .collect();
 
             let mut scan_list_state = ListState::default();
-            scan_list_state.select(Some(scan_items_index));
+            scan_list_state.select(Some(peripherals_index));
 
             StatefulWidget::render(
                 List::new(scan_list)
