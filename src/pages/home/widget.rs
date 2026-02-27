@@ -42,7 +42,9 @@ impl HomePage {
 
     pub async fn tick(&mut self) {
         if let Some(spinner) = &mut self.scan_spinner {
-            spinner.tick();
+            spinner.tick()
+        } else if let Some(spinner) = &mut self.characteristic_spinner {
+            spinner.tick()
         }
     }
 
@@ -55,7 +57,7 @@ impl HomePage {
                         let local_names = self.state.get_local_names();
                         let index = self.state.get_index();
                         let local_name = &local_names[index];
-                        self.get_characteristics(&local_name).await?
+                        self.get_characteristics(local_name).await?
                     }
                 }
                 KeyCode::Up => self.state.update_index(-1),
@@ -132,25 +134,14 @@ impl HomePage {
             .render(cmd_area, buf);
     }
 
-    fn render_data_area(&self, area: Rect, buf: &mut Buffer) {
-        let layout = Layout::default()
-            .direction(Direction::Horizontal)
-            .constraints(vec![Constraint::Percentage(20), Constraint::Percentage(80)]);
-
-        let [list_area, data_area] = layout.areas(area);
-
-        Block::bordered()
-            .title(Line::from("  ~~~~~~~~~~~~~  ").bold().centered())
-            .border_set(border::DOUBLE)
-            .render(data_area, buf);
-
+    fn render_list_area(&self, area: Rect, buf: &mut Buffer) {
         let list_block = Block::bordered()
             .title(Line::from(" ***** ").bold().centered())
             .border_set(border::DOUBLE);
 
-        list_block.clone().render(list_area, buf);
+        list_block.clone().render(area, buf);
 
-        let inner = list_block.inner(list_area);
+        let inner = list_block.inner(area);
 
         if let Some(scan_spinner) = &self.scan_spinner {
             let layout = Layout::default()
@@ -188,11 +179,73 @@ impl HomePage {
                     .block(list_block)
                     .highlight_symbol(">> ")
                     .highlight_style(Style::new().bold()),
-                list_area,
+                area,
                 buf,
                 &mut scan_list_state,
             );
         }
+    }
+
+    fn render_info_area(&self, area: Rect, buf: &mut Buffer) {
+        let info_block = Block::bordered()
+            .title(Line::from("  ~~~~~~~~~~~~~  ").bold().centered())
+            .border_set(border::DOUBLE);
+        info_block.clone().render(area, buf);
+
+        let inner = info_block.inner(area);
+
+        if let Some(characteristic_spinner) = &self.characteristic_spinner {
+            let layout = Layout::default()
+                .direction(Direction::Vertical)
+                .constraints([
+                    Constraint::Percentage(50),
+                    Constraint::Length(3),
+                    Constraint::Percentage(50),
+                ])
+                .split(inner);
+
+            let center_area = layout[1];
+
+            let paragraph = Paragraph::new(vec![
+                Line::raw("Loading..."),
+                Line::from(characteristic_spinner.frame()).bold(),
+            ])
+            .alignment(Alignment::Center);
+
+            paragraph.render(center_area, buf);
+        } else {
+            let characteristics = self.state.get_characteristics();
+            let index = self.state.get_index();
+
+            let characteristic_list: Vec<ListItem> = characteristics
+                .iter()
+                .map(|p| ListItem::new(Line::from(p.as_str()).alignment(Alignment::Left)))
+                .collect();
+
+            let mut characteristic_list_state = ListState::default();
+            characteristic_list_state.select(Some(index));
+
+            StatefulWidget::render(
+                List::new(characteristic_list)
+                    .block(info_block)
+                    .highlight_symbol(">> ")
+                    .highlight_style(Style::new().bold()),
+                area,
+                buf,
+                &mut characteristic_list_state,
+            );
+        }
+    }
+
+    fn render_data_area(&self, area: Rect, buf: &mut Buffer) {
+        let layout = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints(vec![Constraint::Percentage(20), Constraint::Percentage(80)]);
+
+        let [list_area, info_area] = layout.areas(area);
+
+        self.render_list_area(list_area, buf);
+        self.render_info_area(info_area, buf);
     }
 
     fn render_error_popup(&self, area: Rect, buf: &mut Buffer, err: &str) {

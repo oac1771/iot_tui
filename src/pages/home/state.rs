@@ -12,6 +12,10 @@ impl State {
         &self.local_names
     }
 
+    pub fn get_characteristics(&self) -> &Vec<String> {
+        &self.characteristics
+    }
+
     pub fn get_index(&self) -> usize {
         self.index
     }
