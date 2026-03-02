@@ -1,7 +1,7 @@
 use crate::pages::home::HomePageEvent;
 use futures_util::StreamExt;
 use iot_sdk::{Peripheral, central::Central};
-use tokio::sync::mpsc::Sender;
+use tokio::{time::{Duration, sleep}, sync::mpsc::Sender, select};
 
 pub struct Peripherals;
 
@@ -62,6 +62,11 @@ impl Peripherals {
                     .await
                     .map_err(|e| e.to_string())?;
 
+                println!("Found!");
+                // add channel call to update loading message with: peripheral found
+
+                peripheral.connect().await.map_err(|e|e.to_string())?;
+
                 let characteristics = peripheral
                     .characteristics()
                     .iter()
@@ -69,8 +74,13 @@ impl Peripherals {
                     .collect::<Vec<String>>();
 
                 Ok(characteristics)
-            }
-            .await;
+            };
+
+
+            let result = select! {
+                result = result => result,
+                _ = sleep(Duration::from_secs(5)) => Err(String::from("Timed out waiting for characteristic!"))
+            };
 
             let event = match result {
                 Ok(characteristics) => HomePageEvent::CharacteristicScanComplete(characteristics),

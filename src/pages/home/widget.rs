@@ -52,7 +52,10 @@ impl HomePage {
         if key_event.kind == KeyEventKind::Press && self.error.is_none() {
             match key_event.code {
                 KeyCode::Char('s') => self.get_peripherals().await?,
-                KeyCode::Enter if !self.state.get_local_names().is_empty() => {
+                KeyCode::Enter
+                    if !self.state.get_local_names().is_empty()
+                        && self.characteristic_spinner.is_none() =>
+                {
                     if let KeyCode::Enter = key_event.code {
                         let local_names = self.state.get_local_names();
                         let index = self.state.get_index();
@@ -81,6 +84,7 @@ impl HomePage {
                 self.state.update_local_names(local_names);
             }
             HomePageEvent::PeripheralScanError(err) => {
+                self.scan_spinner = None;
                 self.error = Some(err);
             }
             HomePageEvent::CharacteristicScanPending => {
@@ -90,7 +94,10 @@ impl HomePage {
                 self.characteristic_spinner = None;
                 self.state.update_characteristics(characteristics);
             }
-            HomePageEvent::CharacteristicScanError(err) => self.error = Some(err),
+            HomePageEvent::CharacteristicScanError(err) => {
+                self.characteristic_spinner = None;
+                self.error = Some(err);
+            }
         }
         Ok(())
     }
@@ -207,7 +214,7 @@ impl HomePage {
             let center_area = layout[1];
 
             let paragraph = Paragraph::new(vec![
-                Line::raw("Loading..."),
+                // Line::raw("Loading..."),
                 Line::from(characteristic_spinner.frame()).bold(),
             ])
             .alignment(Alignment::Center);
