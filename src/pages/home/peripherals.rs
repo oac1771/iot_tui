@@ -1,7 +1,11 @@
 use crate::pages::home::HomePageEvent;
 use futures_util::StreamExt;
 use iot_sdk::{Peripheral, central::Central};
-use tokio::{time::{Duration, sleep}, sync::mpsc::Sender, select};
+use tokio::{
+    select,
+    sync::mpsc::Sender,
+    time::{Duration, sleep},
+};
 
 pub struct Peripherals;
 
@@ -55,31 +59,38 @@ impl Peripherals {
         let local_name = local_name.to_string();
 
         tokio::spawn(async move {
-            let result = async {
+            let characteristics_result = async {
                 let central = Central::new().await.map_err(|e| e.to_string())?;
                 let peripheral = central
                     .find_peripheral(&local_name)
                     .await
                     .map_err(|e| e.to_string())?;
 
-                println!("Found!");
-                // add channel call to update loading message with: peripheral found
+                let _ = tx
+                    .send(HomePageEvent::CharacteristicScanPeripheralFound)
+                    .await;
 
-                peripheral.connect().await.map_err(|e|e.to_string())?;
+                let connection_result = select! {
+                    result = peripheral.connect() => result.map_err(|e| e.to_string()),
+                    _ = sleep(Duration::from_secs(5)) => Err(format!("Timed out connecting to {local_name} Peripheral"))
+                };
 
-                let characteristics = peripheral
-                    .characteristics()
-                    .iter()
-                    .map(|c| c.to_string())
-                    .collect::<Vec<String>>();
+                if let Err(err) = connection_result {
+                    Err(err)
+                } else {
+                    let characteristics = peripheral
+                        .characteristics()
+                        .iter()
+                        .map(|c| c.to_string())
+                        .collect::<Vec<String>>();
 
-                Ok(characteristics)
+                    Ok(characteristics)
+                }
             };
 
-
             let result = select! {
-                result = result => result,
-                _ = sleep(Duration::from_secs(5)) => Err(String::from("Timed out waiting for characteristic!"))
+                result = characteristics_result => result,
+                _ = sleep(Duration::from_secs(10)) => Err(format!("Timed out Loading characteristics metadata for {local_name} Peripheral"))
             };
 
             let event = match result {

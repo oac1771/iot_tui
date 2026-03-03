@@ -17,6 +17,7 @@ pub struct HomePage {
     error: Option<String>,
     scan_spinner: Option<Spinner>,
     characteristic_spinner: Option<Spinner>,
+    characteristic_scan_state: Option<String>,
     home_page_event_tx: Sender<HomePageEvent>,
 }
 
@@ -25,6 +26,7 @@ pub enum HomePageEvent {
     PeripheralScanComplete(Vec<String>),
     PeripheralScanError(String),
     CharacteristicScanPending,
+    CharacteristicScanPeripheralFound,
     CharacteristicScanComplete(Vec<String>),
     CharacteristicScanError(String),
 }
@@ -36,6 +38,7 @@ impl HomePage {
             error: None,
             scan_spinner: None,
             characteristic_spinner: None,
+            characteristic_scan_state: None,
             home_page_event_tx,
         }
     }
@@ -90,12 +93,17 @@ impl HomePage {
             HomePageEvent::CharacteristicScanPending => {
                 self.characteristic_spinner = Some(Spinner::default())
             }
+            HomePageEvent::CharacteristicScanPeripheralFound => {
+                self.characteristic_scan_state = Some(String::from("Peripheral Found"))
+            }
             HomePageEvent::CharacteristicScanComplete(characteristics) => {
                 self.characteristic_spinner = None;
+                self.characteristic_scan_state = None;
                 self.state.update_characteristics(characteristics);
             }
             HomePageEvent::CharacteristicScanError(err) => {
                 self.characteristic_spinner = None;
+                self.characteristic_scan_state = None;
                 self.error = Some(err);
             }
         }
@@ -213,8 +221,14 @@ impl HomePage {
 
             let center_area = layout[1];
 
+            let line = if let Some(state) = &self.characteristic_scan_state {
+                state
+            } else {
+                &String::from("Loading...")
+            };
+
             let paragraph = Paragraph::new(vec![
-                // Line::raw("Loading..."),
+                Line::raw(line),
                 Line::from(characteristic_spinner.frame()).bold(),
             ])
             .alignment(Alignment::Center);
