@@ -238,23 +238,17 @@ impl HomePage {
             let characteristics = self.state.get_characteristics();
             let index = self.state.get_index();
 
-            let characteristic_list: Vec<ListItem> = characteristics
-                .iter()
-                .map(|p| ListItem::new(Line::from(p.as_str()).alignment(Alignment::Left)))
-                .collect();
+            let characteristics_entry = if characteristics.is_empty() {
+                ""
+            } else {
+                &self.state.get_characteristics()[index]
+            };
 
-            let mut characteristic_list_state = ListState::default();
-            characteristic_list_state.select(Some(index));
-
-            StatefulWidget::render(
-                List::new(characteristic_list)
-                    .block(info_block)
-                    .highlight_symbol(">> ")
-                    .highlight_style(Style::new().bold()),
-                area,
-                buf,
-                &mut characteristic_list_state,
-            );
+            Paragraph::new(Line::raw(characteristics_entry))
+                .block(info_block)
+                .centered()
+                .wrap(Wrap { trim: true })
+                .render(area, buf);
         }
     }
 
