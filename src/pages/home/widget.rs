@@ -2,6 +2,7 @@ use crate::utils::spinner::Spinner;
 
 use super::{State, peripherals::Peripherals};
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind};
+use iot_sdk::Characteristic;
 use ratatui::{
     buffer::Buffer,
     layout::{Alignment, Constraint, Direction, Flex, Layout, Rect},
@@ -27,7 +28,7 @@ pub enum HomePageEvent {
     PeripheralScanError(String),
     CharacteristicScanPending,
     CharacteristicScanPeripheralFound,
-    CharacteristicScanComplete(Vec<String>),
+    CharacteristicScanComplete(Vec<Characteristic>),
     CharacteristicScanError(String),
 }
 
@@ -238,17 +239,14 @@ impl HomePage {
             let characteristics = self.state.get_characteristics();
             let index = self.state.get_index();
 
-            let characteristics_entry = if characteristics.is_empty() {
-                ""
-            } else {
-                &self.state.get_characteristics()[index]
-            };
-
-            Paragraph::new(Line::raw(characteristics_entry))
-                .block(info_block)
-                .centered()
-                .wrap(Wrap { trim: true })
-                .render(area, buf);
+            if !characteristics.is_empty() {
+                let characteristics_entry = &self.state.get_characteristics()[index].to_string();
+                Paragraph::new(Line::raw(characteristics_entry))
+                    .block(info_block)
+                    .centered()
+                    .wrap(Wrap { trim: true })
+                    .render(area, buf);
+            }
         }
     }
 

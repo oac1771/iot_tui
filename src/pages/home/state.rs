@@ -1,10 +1,12 @@
+use iot_sdk::Characteristic;
+
 use crate::utils::evaluate_wrapping_index;
 
 #[derive(Default, Debug)]
 pub struct State {
     index: usize,
     local_names: Vec<String>,
-    characteristics: Vec<String>,
+    characteristics: Vec<Characteristic>,
 }
 
 impl State {
@@ -12,7 +14,7 @@ impl State {
         &self.local_names
     }
 
-    pub fn get_characteristics(&self) -> &Vec<String> {
+    pub fn get_characteristics(&self) -> &Vec<Characteristic> {
         &self.characteristics
     }
 
@@ -24,7 +26,7 @@ impl State {
         self.local_names = local_names
     }
 
-    pub fn update_characteristics(&mut self, characteristics: Vec<String>) {
+    pub fn update_characteristics(&mut self, characteristics: Vec<Characteristic>) {
         self.characteristics = characteristics
     }
 

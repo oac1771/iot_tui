@@ -1,6 +1,6 @@
 use crate::pages::home::HomePageEvent;
 use futures_util::StreamExt;
-use iot_sdk::{Peripheral, central::Central};
+use iot_sdk::{Characteristic, Peripheral, central::Central};
 use tokio::{
     select,
     sync::mpsc::Sender,
@@ -81,8 +81,8 @@ impl Peripherals {
                     let characteristics = peripheral
                         .characteristics()
                         .iter()
-                        .map(|c| c.to_string())
-                        .collect::<Vec<String>>();
+                        .map(|c| c.clone())
+                        .collect::<Vec<Characteristic>>();
 
                     Ok(characteristics)
                 }
