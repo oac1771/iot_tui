@@ -16,8 +16,8 @@ use tokio::sync::mpsc::Sender;
 pub struct HomePage {
     state: State,
     error: Option<String>,
-    scan_spinner: Option<Spinner>,
-    characteristic_spinner: Option<Spinner>,
+    peripheral_scan_spinner: Option<Spinner>,
+    characteristic_scan_spinner: Option<Spinner>,
     characteristic_scan_state: Option<String>,
     home_page_event_tx: Sender<HomePageEvent>,
 }
@@ -37,17 +37,17 @@ impl HomePage {
         Self {
             state: State::default(),
             error: None,
-            scan_spinner: None,
-            characteristic_spinner: None,
+            peripheral_scan_spinner: None,
+            characteristic_scan_spinner: None,
             characteristic_scan_state: None,
             home_page_event_tx,
         }
     }
 
     pub async fn tick(&mut self) {
-        if let Some(spinner) = &mut self.scan_spinner {
+        if let Some(spinner) = &mut self.peripheral_scan_spinner {
             spinner.tick()
-        } else if let Some(spinner) = &mut self.characteristic_spinner {
+        } else if let Some(spinner) = &mut self.characteristic_scan_spinner {
             spinner.tick()
         }
     }
@@ -58,7 +58,7 @@ impl HomePage {
                 KeyCode::Char('s') => self.get_peripherals().await?,
                 KeyCode::Enter
                     if !self.state.get_local_names().is_empty()
-                        && self.characteristic_spinner.is_none() =>
+                        && self.characteristic_scan_spinner.is_none() =>
                 {
                     if let KeyCode::Enter = key_event.code {
                         let local_names = self.state.get_local_names();
@@ -82,28 +82,30 @@ impl HomePage {
 
     pub async fn handle_page_event(&mut self, event: HomePageEvent) -> Result<(), String> {
         match event {
-            HomePageEvent::PeripheralScanPending => self.scan_spinner = Some(Spinner::default()),
+            HomePageEvent::PeripheralScanPending => {
+                self.peripheral_scan_spinner = Some(Spinner::default())
+            }
             HomePageEvent::PeripheralScanComplete(local_names) => {
-                self.scan_spinner = None;
+                self.peripheral_scan_spinner = None;
                 self.state.update_local_names(local_names);
             }
             HomePageEvent::PeripheralScanError(err) => {
-                self.scan_spinner = None;
+                self.peripheral_scan_spinner = None;
                 self.error = Some(err);
             }
             HomePageEvent::CharacteristicScanPending => {
-                self.characteristic_spinner = Some(Spinner::default())
+                self.characteristic_scan_spinner = Some(Spinner::default())
             }
             HomePageEvent::CharacteristicScanPeripheralFound => {
                 self.characteristic_scan_state = Some(String::from("Peripheral Found"))
             }
             HomePageEvent::CharacteristicScanComplete(characteristics) => {
-                self.characteristic_spinner = None;
+                self.characteristic_scan_spinner = None;
                 self.characteristic_scan_state = None;
                 self.state.update_characteristics(characteristics);
             }
             HomePageEvent::CharacteristicScanError(err) => {
-                self.characteristic_spinner = None;
+                self.characteristic_scan_spinner = None;
                 self.characteristic_scan_state = None;
                 self.error = Some(err);
             }
@@ -131,12 +133,11 @@ impl HomePage {
         let instructions = Line::from(vec![" Quit ".into(), "<Ctrl + c> ".blue().bold()]);
 
         let cmd_block = Block::bordered()
-            .title(Line::from("  ****  ").bold().centered())
+            .title(Line::from("  Commands  ").bold().centered())
             .border_set(border::DOUBLE)
             .title_bottom(instructions.centered());
 
         Block::bordered()
-            .title(Line::from("  ****  ").bold().centered())
             .border_set(border::DOUBLE)
             .render(meta_data_area, buf);
 
@@ -150,115 +151,69 @@ impl HomePage {
             .render(cmd_area, buf);
     }
 
-    fn render_list_area(&self, area: Rect, buf: &mut Buffer) {
-        let list_block = Block::bordered()
-            .title(Line::from(" ***** ").bold().centered())
-            .border_set(border::DOUBLE);
+    fn render_peripheral_names(&self, area: Rect, buf: &mut Buffer, block: Block) {
+        let local_names = self.state.get_local_names();
+        let index = self.state.get_index();
 
-        list_block.clone().render(area, buf);
+        let scan_list: Vec<ListItem> = local_names
+            .iter()
+            .map(|p| ListItem::new(Line::from(p.as_str()).alignment(Alignment::Center)))
+            .collect();
 
-        let inner = list_block.inner(area);
+        let mut scan_list_state = ListState::default();
+        scan_list_state.select(Some(index));
 
-        if let Some(scan_spinner) = &self.scan_spinner {
-            let layout = Layout::default()
-                .direction(Direction::Vertical)
-                .constraints([
-                    Constraint::Percentage(50),
-                    Constraint::Length(3),
-                    Constraint::Percentage(50),
-                ])
-                .split(inner);
-
-            let center_area = layout[1];
-
-            let paragraph = Paragraph::new(vec![
-                Line::raw("Scanning..."),
-                Line::from(scan_spinner.frame()).bold(),
-            ])
-            .alignment(Alignment::Center);
-
-            paragraph.render(center_area, buf);
-        } else {
-            let local_names = self.state.get_local_names();
-            let index = self.state.get_index();
-
-            let scan_list: Vec<ListItem> = local_names
-                .iter()
-                .map(|p| ListItem::new(Line::from(p.as_str()).alignment(Alignment::Left)))
-                .collect();
-
-            let mut scan_list_state = ListState::default();
-            scan_list_state.select(Some(index));
-
-            StatefulWidget::render(
-                List::new(scan_list)
-                    .block(list_block)
-                    .highlight_symbol(">> ")
-                    .highlight_style(Style::new().bold()),
-                area,
-                buf,
-                &mut scan_list_state,
-            );
-        }
+        StatefulWidget::render(
+            List::new(scan_list)
+                .block(block)
+                .highlight_style(Style::new().bold().green()),
+            area,
+            buf,
+            &mut scan_list_state,
+        );
     }
 
-    fn render_info_area(&self, area: Rect, buf: &mut Buffer) {
-        let info_block = Block::bordered()
-            .title(Line::from("  ~~~~~~~~~~~~~  ").bold().centered())
-            .border_set(border::DOUBLE);
-        info_block.clone().render(area, buf);
+    fn render_scanning_widget(
+        &self,
+        area: Rect,
+        buf: &mut Buffer,
+        scan_spinner: &Spinner,
+        block: Block,
+    ) {
+        let inner = block.inner(area);
 
-        let inner = info_block.inner(area);
-
-        if let Some(characteristic_spinner) = &self.characteristic_spinner {
-            let layout = Layout::default()
-                .direction(Direction::Vertical)
-                .constraints([
-                    Constraint::Percentage(50),
-                    Constraint::Length(3),
-                    Constraint::Percentage(50),
-                ])
-                .split(inner);
-
-            let center_area = layout[1];
-
-            let line = if let Some(state) = &self.characteristic_scan_state {
-                state
-            } else {
-                &String::from("Loading...")
-            };
-
-            let paragraph = Paragraph::new(vec![
-                Line::raw(line),
-                Line::from(characteristic_spinner.frame()).bold(),
+        let layout = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Percentage(50),
+                Constraint::Length(3),
+                Constraint::Percentage(50),
             ])
-            .alignment(Alignment::Center);
+            .split(inner);
 
-            paragraph.render(center_area, buf);
-        } else {
-            let characteristics = self.state.get_characteristics();
-            let index = self.state.get_index();
+        let center_area = layout[1];
 
-            if !characteristics.is_empty() {
-                let characteristics_entry = &self.state.get_characteristics()[index].to_string();
-                Paragraph::new(Line::raw(characteristics_entry))
-                    .block(info_block)
-                    .centered()
-                    .wrap(Wrap { trim: true })
-                    .render(area, buf);
-            }
-        }
+        let paragraph = Paragraph::new(vec![
+            Line::raw("Scanning..."),
+            Line::from(scan_spinner.frame()).bold(),
+        ])
+        .alignment(Alignment::Center);
+
+        paragraph.render(center_area, buf);
     }
 
     fn render_data_area(&self, area: Rect, buf: &mut Buffer) {
-        let layout = Layout::default()
-            .direction(Direction::Horizontal)
-            .constraints(vec![Constraint::Percentage(20), Constraint::Percentage(80)]);
+        let data_block = Block::bordered()
+            .title(Line::from(" ***** ").bold().centered())
+            .border_set(border::DOUBLE);
 
-        let [list_area, info_area] = layout.areas(area);
+        data_block.clone().render(area, buf);
 
-        self.render_list_area(list_area, buf);
-        self.render_info_area(info_area, buf);
+        if let Some(scan_spinner) = &self.peripheral_scan_spinner {
+            self.render_scanning_widget(area, buf, scan_spinner, data_block.clone());
+        } else {
+            self.render_peripheral_names(area, buf, data_block);
+        }
     }
 
     fn render_error_popup(&self, area: Rect, buf: &mut Buffer, err: &str) {
