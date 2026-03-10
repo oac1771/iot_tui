@@ -81,7 +81,7 @@ impl Peripherals {
                     let characteristics = peripheral
                         .characteristics()
                         .iter()
-                        .map(|c| c.clone())
+                        .cloned()
                         .collect::<Vec<Characteristic>>();
 
                     Ok(characteristics)

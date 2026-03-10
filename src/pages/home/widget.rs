@@ -18,7 +18,7 @@ pub struct HomePage {
     error: Option<String>,
     peripheral_scan_spinner: Option<Spinner>,
     characteristic_scan_spinner: Option<Spinner>,
-    characteristic_scan_state: Option<String>,
+    characteristic_scan_state: CharacteristicScanState,
     home_page_event_tx: Sender<HomePageEvent>,
 }
 
@@ -32,6 +32,22 @@ pub enum HomePageEvent {
     CharacteristicScanError(String),
 }
 
+enum CharacteristicScanState {
+    Idle,
+    Pending,
+    PeripheralFound,
+}
+
+impl CharacteristicScanState {
+    fn to_string(&self) -> &str {
+        match self {
+            Self::Idle => "idle",
+            Self::Pending => "Pending",
+            Self::PeripheralFound => "Peripheral Found",
+        }
+    }
+}
+
 impl HomePage {
     pub fn new(home_page_event_tx: Sender<HomePageEvent>) -> Self {
         Self {
@@ -39,7 +55,7 @@ impl HomePage {
             error: None,
             peripheral_scan_spinner: None,
             characteristic_scan_spinner: None,
-            characteristic_scan_state: None,
+            characteristic_scan_state: CharacteristicScanState::Idle,
             home_page_event_tx,
         }
     }
@@ -94,19 +110,20 @@ impl HomePage {
                 self.error = Some(err);
             }
             HomePageEvent::CharacteristicScanPending => {
+                self.characteristic_scan_state = CharacteristicScanState::Pending;
                 self.characteristic_scan_spinner = Some(Spinner::default())
             }
             HomePageEvent::CharacteristicScanPeripheralFound => {
-                self.characteristic_scan_state = Some(String::from("Peripheral Found"))
+                self.characteristic_scan_state = CharacteristicScanState::PeripheralFound
             }
             HomePageEvent::CharacteristicScanComplete(characteristics) => {
                 self.characteristic_scan_spinner = None;
-                self.characteristic_scan_state = None;
+                self.characteristic_scan_state = CharacteristicScanState::Idle;
                 self.state.update_characteristics(characteristics);
             }
             HomePageEvent::CharacteristicScanError(err) => {
                 self.characteristic_scan_spinner = None;
-                self.characteristic_scan_state = None;
+                self.characteristic_scan_state = CharacteristicScanState::Idle;
                 self.error = Some(err);
             }
         }
@@ -173,11 +190,25 @@ impl HomePage {
         );
     }
 
-    fn render_scanning_widget(
+    fn _render_characteristics(&self, area: Rect, buf: &mut Buffer, block: Block) {
+        let characteristics = self.state.get_characteristics();
+        let index = self.state.get_index();
+
+        if !characteristics.is_empty() {
+            let characteristics_entry = &self.state.get_characteristics()[index].to_string();
+            Paragraph::new(Line::raw(characteristics_entry))
+                .block(block)
+                .centered()
+                .wrap(Wrap { trim: true })
+                .render(area, buf);
+        }
+    }
+
+    fn render_peripheral_scan_spinner(
         &self,
         area: Rect,
         buf: &mut Buffer,
-        scan_spinner: &Spinner,
+        spinner: &Spinner,
         block: Block,
     ) {
         let inner = block.inner(area);
@@ -195,9 +226,37 @@ impl HomePage {
 
         let paragraph = Paragraph::new(vec![
             Line::raw("Scanning..."),
-            Line::from(scan_spinner.frame()).bold(),
+            Line::from(spinner.frame()).bold(),
         ])
         .alignment(Alignment::Center);
+
+        paragraph.render(center_area, buf);
+    }
+
+    fn render_characteristic_scan_spinner(
+        &self,
+        area: Rect,
+        buf: &mut Buffer,
+        spinner: &Spinner,
+        block: Block,
+    ) {
+        let inner = block.inner(area);
+
+        let layout = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Percentage(50),
+                Constraint::Length(3),
+                Constraint::Percentage(50),
+            ])
+            .split(inner);
+
+        let center_area = layout[1];
+
+        let line = self.characteristic_scan_state.to_string();
+
+        let paragraph = Paragraph::new(vec![Line::raw(line), Line::from(spinner.frame()).bold()])
+            .alignment(Alignment::Center);
 
         paragraph.render(center_area, buf);
     }
@@ -209,10 +268,22 @@ impl HomePage {
 
         data_block.clone().render(area, buf);
 
-        if let Some(scan_spinner) = &self.peripheral_scan_spinner {
-            self.render_scanning_widget(area, buf, scan_spinner, data_block.clone());
+        if let Some(peripheral_scan_spinner) = &self.peripheral_scan_spinner {
+            self.render_peripheral_scan_spinner(
+                area,
+                buf,
+                peripheral_scan_spinner,
+                data_block.clone(),
+            )
+        } else if let Some(characteristic_scan_spinner) = &self.characteristic_scan_spinner {
+            self.render_characteristic_scan_spinner(
+                area,
+                buf,
+                characteristic_scan_spinner,
+                data_block.clone(),
+            )
         } else {
-            self.render_peripheral_names(area, buf, data_block);
+            self.render_peripheral_names(area, buf, data_block)
         }
     }
 
@@ -252,11 +323,11 @@ impl Widget for &HomePage {
             .constraints(vec![Constraint::Percentage(25), Constraint::Percentage(75)]);
         let [title_area, data_area] = layout.areas(area);
 
-        self.render_title_area(title_area, buf);
-        self.render_data_area(data_area, buf);
-
         if let Some(err) = &self.error {
             self.render_error_popup(area, buf, err);
+        } else {
+            self.render_title_area(title_area, buf);
+            self.render_data_area(data_area, buf);
         }
     }
 }
