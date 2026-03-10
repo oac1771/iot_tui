@@ -92,6 +92,7 @@ impl HomePage {
             HomePageEvent::PeripheralScanComplete(local_names) => {
                 self.peripheral_scan_spinner = None;
                 self.view = View::PeripheralList;
+                self.state.clear_characteristics(local_names.len());
                 self.state.update_local_names(local_names);
             }
             HomePageEvent::PeripheralScanError(err) => {
@@ -176,15 +177,24 @@ impl HomePage {
 
     fn render_characteristics(&self, area: Rect, buf: &mut Buffer, block: &Block) {
         let characteristics = self.state.get_characteristics();
-        let index = self.state.get_index();
 
         if !characteristics.is_empty() {
-            let characteristics_entry = &self.state.get_characteristics()[index].to_string();
-            Paragraph::new(Line::raw(characteristics_entry))
-                .block(block.clone())
-                .centered()
-                .wrap(Wrap { trim: true })
-                .render(area, buf);
+            let mut characteristic_list_state = ListState::default();
+            characteristic_list_state.select(Some(0));
+
+            let characteristics_entry = characteristics
+                .iter()
+                .map(|c| ListItem::new(Line::from(c.to_string()).alignment(Alignment::Center)))
+                .collect::<Vec<ListItem>>();
+
+            StatefulWidget::render(
+                List::new(characteristics_entry)
+                    .block(block.clone())
+                    .highlight_style(Style::new().bold().green()),
+                area,
+                buf,
+                &mut characteristic_list_state,
+            );
         }
     }
 

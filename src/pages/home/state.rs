@@ -6,7 +6,7 @@ use crate::utils::evaluate_wrapping_index;
 pub struct State {
     index: usize,
     local_names: Vec<String>,
-    characteristics: Vec<Characteristic>,
+    characteristics: Vec<Vec<Characteristic>>,
 }
 
 impl State {
@@ -15,7 +15,7 @@ impl State {
     }
 
     pub fn get_characteristics(&self) -> &Vec<Characteristic> {
-        &self.characteristics
+        &self.characteristics[self.index]
     }
 
     pub fn get_index(&self) -> usize {
@@ -27,7 +27,11 @@ impl State {
     }
 
     pub fn update_characteristics(&mut self, characteristics: Vec<Characteristic>) {
-        self.characteristics = characteristics
+        self.characteristics[self.index] = characteristics;
+    }
+
+    pub fn clear_characteristics(&mut self, len: usize) {
+        self.characteristics = vec![vec![]; len]
     }
 
     pub fn update_index(&mut self, update: i8) {
