@@ -12,7 +12,7 @@ pub struct Peripherals;
 impl Peripherals {
     pub async fn get_peripherals(home_page_event_tx: &Sender<HomePageEvent>) -> Result<(), String> {
         home_page_event_tx
-            .send(HomePageEvent::PeripheralScanPending)
+            .send(HomePageEvent::PeripheralScanStarted)
             .await
             .map_err(|err| err.to_string())?;
 
@@ -51,7 +51,7 @@ impl Peripherals {
         local_name: &str,
     ) -> Result<(), String> {
         home_page_event_tx
-            .send(HomePageEvent::CharacteristicScanPending)
+            .send(HomePageEvent::CharacteristicScanStarted)
             .await
             .map_err(|err| err.to_string())?;
 
@@ -65,10 +65,6 @@ impl Peripherals {
                     .find_peripheral(&local_name)
                     .await
                     .map_err(|e| e.to_string())?;
-
-                let _ = tx
-                    .send(HomePageEvent::CharacteristicScanPeripheralFound)
-                    .await;
 
                 let connection_result = select! {
                     result = peripheral.connect() => result.map_err(|e| e.to_string()),
