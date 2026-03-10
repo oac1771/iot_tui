@@ -19,9 +19,7 @@ pub struct HomePage {
     view: View,
     home_page_event_tx: Sender<HomePageEvent>,
     peripheral_scan_spinner: Option<Spinner>,
-    peripheral_scan_state: ScanState,
     characteristic_scan_spinner: Option<Spinner>,
-    characteristic_scan_state: ScanState,
 }
 
 pub enum HomePageEvent {
@@ -31,12 +29,6 @@ pub enum HomePageEvent {
     CharacteristicScanStarted,
     CharacteristicScanComplete(Vec<Characteristic>),
     CharacteristicScanError(String),
-}
-
-enum ScanState {
-    Idle,
-    Started,
-    Complete,
 }
 
 enum View {
@@ -52,9 +44,7 @@ impl HomePage {
             view: View::PeripheralList,
             home_page_event_tx,
             peripheral_scan_spinner: None,
-            peripheral_scan_state: ScanState::Idle,
             characteristic_scan_spinner: None,
-            characteristic_scan_state: ScanState::Idle,
         }
     }
 
@@ -98,32 +88,26 @@ impl HomePage {
         match event {
             HomePageEvent::PeripheralScanStarted => {
                 self.peripheral_scan_spinner = Some(Spinner::default());
-                self.peripheral_scan_state = ScanState::Started;
             }
             HomePageEvent::PeripheralScanComplete(local_names) => {
                 self.peripheral_scan_spinner = None;
-                self.peripheral_scan_state = ScanState::Complete;
                 self.view = View::PeripheralList;
                 self.state.update_local_names(local_names);
             }
             HomePageEvent::PeripheralScanError(err) => {
                 self.peripheral_scan_spinner = None;
-                self.peripheral_scan_state = ScanState::Idle;
                 self.error = Some(err);
             }
             HomePageEvent::CharacteristicScanStarted => {
-                self.characteristic_scan_state = ScanState::Started;
                 self.characteristic_scan_spinner = Some(Spinner::default())
             }
             HomePageEvent::CharacteristicScanComplete(characteristics) => {
                 self.characteristic_scan_spinner = None;
-                self.characteristic_scan_state = ScanState::Complete;
                 self.view = View::CharacteristicList;
                 self.state.update_characteristics(characteristics);
             }
             HomePageEvent::CharacteristicScanError(err) => {
                 self.characteristic_scan_spinner = None;
-                self.characteristic_scan_state = ScanState::Idle;
                 self.error = Some(err);
             }
         }
@@ -280,16 +264,8 @@ impl HomePage {
             )
         } else {
             match self.view {
-                View::PeripheralList => {
-                    if let ScanState::Complete = self.peripheral_scan_state {
-                        self.render_peripheral_names(area, buf, &data_block)
-                    }
-                }
-                View::CharacteristicList => {
-                    if let ScanState::Complete = self.characteristic_scan_state {
-                        self.render_characteristics(area, buf, &data_block);
-                    }
-                }
+                View::PeripheralList => self.render_peripheral_names(area, buf, &data_block),
+                View::CharacteristicList => self.render_characteristics(area, buf, &data_block),
             }
         }
     }
