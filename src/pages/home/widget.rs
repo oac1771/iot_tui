@@ -16,6 +16,7 @@ use tokio::sync::mpsc::Sender;
 pub struct HomePage {
     state: State,
     error: Option<String>,
+    view: View,
     home_page_event_tx: Sender<HomePageEvent>,
     peripheral_scan_spinner: Option<Spinner>,
     peripheral_scan_state: ScanState,
@@ -38,11 +39,17 @@ enum ScanState {
     Complete,
 }
 
+enum View {
+    PeripheralList,
+    CharacteristicList,
+}
+
 impl HomePage {
     pub fn new(home_page_event_tx: Sender<HomePageEvent>) -> Self {
         Self {
             state: State::default(),
             error: None,
+            view: View::PeripheralList,
             home_page_event_tx,
             peripheral_scan_spinner: None,
             peripheral_scan_state: ScanState::Idle,
@@ -96,6 +103,7 @@ impl HomePage {
             HomePageEvent::PeripheralScanComplete(local_names) => {
                 self.peripheral_scan_spinner = None;
                 self.peripheral_scan_state = ScanState::Complete;
+                self.view = View::PeripheralList;
                 self.state.update_local_names(local_names);
             }
             HomePageEvent::PeripheralScanError(err) => {
@@ -110,6 +118,7 @@ impl HomePage {
             HomePageEvent::CharacteristicScanComplete(characteristics) => {
                 self.characteristic_scan_spinner = None;
                 self.characteristic_scan_state = ScanState::Complete;
+                self.view = View::CharacteristicList;
                 self.state.update_characteristics(characteristics);
             }
             HomePageEvent::CharacteristicScanError(err) => {
@@ -270,11 +279,17 @@ impl HomePage {
                 &data_block,
             )
         } else {
-            if let ScanState::Complete = self.peripheral_scan_state {
-                self.render_peripheral_names(area, buf, &data_block)
-            }
-            if let ScanState::Complete = self.characteristic_scan_state {
-                self.render_characteristics(area, buf, &data_block);
+            match self.view {
+                View::PeripheralList => {
+                    if let ScanState::Complete = self.peripheral_scan_state {
+                        self.render_peripheral_names(area, buf, &data_block)
+                    }
+                }
+                View::CharacteristicList => {
+                    if let ScanState::Complete = self.characteristic_scan_state {
+                        self.render_characteristics(area, buf, &data_block);
+                    }
+                }
             }
         }
     }
