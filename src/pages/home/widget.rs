@@ -176,26 +176,24 @@ impl HomePage {
     }
 
     fn render_characteristics(&self, area: Rect, buf: &mut Buffer, block: &Block) {
-        let characteristics = self.state.get_characteristics();
+        let mut characteristic_list_state = ListState::default();
+        characteristic_list_state.select(Some(0));
 
-        if !characteristics.is_empty() {
-            let mut characteristic_list_state = ListState::default();
-            characteristic_list_state.select(Some(0));
+        let characteristics_entry = self
+            .state
+            .get_characteristics()
+            .iter()
+            .map(|c| ListItem::new(Line::from(c.to_string()).alignment(Alignment::Center)))
+            .collect::<Vec<ListItem>>();
 
-            let characteristics_entry = characteristics
-                .iter()
-                .map(|c| ListItem::new(Line::from(c.to_string()).alignment(Alignment::Center)))
-                .collect::<Vec<ListItem>>();
-
-            StatefulWidget::render(
-                List::new(characteristics_entry)
-                    .block(block.clone())
-                    .highlight_style(Style::new().bold().green()),
-                area,
-                buf,
-                &mut characteristic_list_state,
-            );
-        }
+        StatefulWidget::render(
+            List::new(characteristics_entry)
+                .block(block.clone())
+                .highlight_style(Style::new().bold().green()),
+            area,
+            buf,
+            &mut characteristic_list_state,
+        );
     }
 
     fn render_peripheral_scan_spinner(
