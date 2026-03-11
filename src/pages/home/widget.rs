@@ -58,22 +58,28 @@ impl HomePage {
 
     pub async fn handle_key_event(&mut self, key_event: &KeyEvent) -> Result<(), String> {
         if key_event.kind == KeyEventKind::Press && self.error.is_none() {
-            match key_event.code {
-                KeyCode::Char('s') => self.get_peripherals().await?,
-                KeyCode::Enter
-                    if !self.state.get_local_names().is_empty()
-                        && self.characteristic_scan_spinner.is_none() =>
-                {
-                    if let KeyCode::Enter = key_event.code {
-                        let local_names = self.state.get_local_names();
-                        let index = self.state.get_index();
-                        let local_name = &local_names[index];
-                        self.get_characteristics(local_name).await?
+            match self.view {
+                View::PeripheralList => match key_event.code {
+                    KeyCode::Char('s') => self.get_peripherals().await?,
+                    KeyCode::Enter
+                        if !self.state.get_local_names().is_empty()
+                            && self.characteristic_scan_spinner.is_none() =>
+                    {
+                        if let KeyCode::Enter = key_event.code {
+                            let local_names = self.state.get_local_names();
+                            let index = self.state.get_index();
+                            let local_name = &local_names[index];
+                            self.get_characteristics(local_name).await?
+                        }
                     }
-                }
-                KeyCode::Up => self.state.update_index(-1),
-                KeyCode::Down => self.state.update_index(1),
-                _ => {}
+                    KeyCode::Up => self.state.update_index(-1),
+                    KeyCode::Down => self.state.update_index(1),
+                    _ => {}
+                },
+                View::CharacteristicList => match key_event.code {
+                    KeyCode::Backspace => self.view = View::PeripheralList,
+                    _ => {}
+                },
             }
         } else if key_event.kind == KeyEventKind::Press && self.error.is_some() {
             if let KeyCode::Char('q') = key_event.code {
