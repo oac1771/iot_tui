@@ -128,7 +128,18 @@ impl HomePage {
     }
 
     async fn get_characteristics(&self, local_name: &str) -> Result<(), String> {
-        Peripherals::get_characteristics(&self.home_page_event_tx, local_name).await?;
+        let characteristics = self.state.get_characteristics();
+        if characteristics.is_empty() {
+            Peripherals::get_characteristics(&self.home_page_event_tx, local_name).await?;
+        } else {
+            let _ = self
+                .home_page_event_tx
+                .send(HomePageEvent::CharacteristicScanComplete(
+                    characteristics.clone(),
+                ))
+                .await;
+        }
+
         Ok(())
     }
 

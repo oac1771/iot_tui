@@ -27,7 +27,7 @@ impl Peripherals {
                     .await
                     .map_err(|e| e.to_string())?
                     .filter_map(|p| async move { p.local_name })
-                    .take(5)
+                    .take(15)
                     .collect::<Vec<String>>()
                     .await;
 
