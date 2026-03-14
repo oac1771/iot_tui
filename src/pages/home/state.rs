@@ -4,7 +4,7 @@ use crate::utils::evaluate_wrapping_index;
 
 #[derive(Default, Debug)]
 pub struct State {
-    local_names_index: usize,
+    index: usize,
     local_names: Vec<String>,
     characteristics: Vec<Vec<Characteristic>>,
 }
@@ -15,11 +15,11 @@ impl State {
     }
 
     pub fn get_characteristics(&self) -> &Vec<Characteristic> {
-        &self.characteristics[self.local_names_index]
+        &self.characteristics[self.index]
     }
 
     pub fn get_index(&self) -> usize {
-        self.local_names_index
+        self.index
     }
 
     pub fn update_local_names(&mut self, local_names: Vec<String>) {
@@ -27,7 +27,7 @@ impl State {
     }
 
     pub fn update_characteristics(&mut self, characteristics: Vec<Characteristic>) {
-        self.characteristics[self.local_names_index] = characteristics;
+        self.characteristics[self.index] = characteristics;
     }
 
     pub fn clear_characteristics(&mut self, len: usize) {
@@ -40,12 +40,8 @@ impl State {
         let index = if len == 0 {
             0
         } else {
-            evaluate_wrapping_index(
-                self.local_names_index as isize,
-                update as isize,
-                len as isize,
-            )
+            evaluate_wrapping_index(self.index as isize, update as isize, len as isize)
         };
-        self.local_names_index = index;
+        self.index = index;
     }
 }

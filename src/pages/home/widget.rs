@@ -76,10 +76,11 @@ impl HomePage {
                     KeyCode::Down => self.state.update_index(1),
                     _ => {}
                 },
-                View::CharacteristicList => match key_event.code {
-                    KeyCode::Backspace => self.view = View::PeripheralList,
-                    _ => {}
-                },
+                View::CharacteristicList => {
+                    if key_event.code == KeyCode::Backspace {
+                        self.view = View::PeripheralList
+                    }
+                }
             }
         } else if key_event.kind == KeyEventKind::Press && self.error.is_some() {
             if let KeyCode::Char('q') = key_event.code {
@@ -145,10 +146,6 @@ impl HomePage {
             .border_set(border::DOUBLE)
             .title_bottom(instructions.centered());
 
-        Block::bordered()
-            .border_set(border::DOUBLE)
-            .render(meta_data_area, buf);
-
         let cmds = Line::from(vec![" Scan ".into(), "<s>".blue().bold()]);
 
         Paragraph::new(cmds)
@@ -157,6 +154,30 @@ impl HomePage {
             .left_aligned()
             .wrap(Wrap { trim: true })
             .render(cmd_area, buf);
+
+        let meta_data_block = Block::bordered().border_set(border::DOUBLE);
+
+        let view_specific_cmds = match self.view {
+            View::PeripheralList => Line::from(vec![
+                " View Characteristics ".into(),
+                " <Enter> ".blue().bold(),
+                " Up ".into(),
+                " <Up> ".blue().bold(),
+                " Down ".into(),
+                " <Down> ".blue().bold(),
+            ]),
+            View::CharacteristicList => Line::from(vec![
+                " Go pack to peripheral view ".into(),
+                "<Backspace>".blue().bold(),
+            ]),
+        };
+
+        Paragraph::new(view_specific_cmds)
+            .block(meta_data_block)
+            .white()
+            .centered()
+            .wrap(Wrap { trim: true })
+            .render(meta_data_area, buf);
     }
 
     fn render_peripheral_names(&self, area: Rect, buf: &mut Buffer, block: &Block) {
@@ -193,9 +214,7 @@ impl HomePage {
             .collect::<Vec<ListItem>>();
 
         StatefulWidget::render(
-            List::new(characteristics_entry)
-                .block(block.clone())
-                .highlight_style(Style::new().bold().green()),
+            List::new(characteristics_entry).block(block.clone()),
             area,
             buf,
             &mut characteristic_list_state,
