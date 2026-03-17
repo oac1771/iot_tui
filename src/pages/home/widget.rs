@@ -150,12 +150,9 @@ impl HomePage {
 
         let [cmd_area, meta_data_area] = layout.areas(area);
 
-        let instructions = Line::from(vec![" Quit ".into(), "<Ctrl + c> ".blue().bold()]);
-
         let cmd_block = Block::bordered()
             .title(Line::from("  Commands  ").bold().centered())
-            .border_set(border::DOUBLE)
-            .title_bottom(instructions.centered());
+            .border_set(border::DOUBLE);
 
         let cmds = Line::from(vec![" Scan ".into(), "<s>".blue().bold()]);
 
@@ -166,7 +163,11 @@ impl HomePage {
             .wrap(Wrap { trim: true })
             .render(cmd_area, buf);
 
-        let meta_data_block = Block::bordered().border_set(border::DOUBLE);
+        let instructions = Line::from(vec![" Quit ".into(), "<Ctrl + c> ".blue().bold()]);
+
+        let meta_data_block = Block::bordered()
+            .border_set(border::DOUBLE)
+            .title_bottom(instructions.centered());
 
         let view_specific_cmds = match self.view {
             View::PeripheralList => Line::from(vec![
