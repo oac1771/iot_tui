@@ -15,11 +15,9 @@ use tokio::sync::mpsc::Sender;
 
 pub struct HomePage {
     state: State,
-    error: Option<String>,
     view: View,
+    error: Option<String>,
     home_page_event_tx: Sender<HomePageEvent>,
-    peripheral_scan_spinner: Option<Spinner>,
-    characteristic_scan_spinner: Option<Spinner>,
 }
 
 pub enum HomePageEvent {
@@ -32,8 +30,13 @@ pub enum HomePageEvent {
 }
 
 enum View {
-    PeripheralList,
-    CharacteristicList,
+    Peripheral(ViewState),
+    Characteristic(ViewState),
+}
+
+enum ViewState {
+    Idle,
+    Scanning(Spinner),
 }
 
 impl HomePage {
@@ -41,30 +44,25 @@ impl HomePage {
         Self {
             state: State::default(),
             error: None,
-            view: View::PeripheralList,
+            view: View::Peripheral(ViewState::Idle),
             home_page_event_tx,
-            peripheral_scan_spinner: None,
-            characteristic_scan_spinner: None,
         }
     }
 
     pub async fn tick(&mut self) {
-        if let Some(spinner) = &mut self.peripheral_scan_spinner {
-            spinner.tick()
-        } else if let Some(spinner) = &mut self.characteristic_scan_spinner {
-            spinner.tick()
+        match &mut self.view {
+            View::Peripheral(ViewState::Scanning(spinner)) => spinner.tick(),
+            View::Characteristic(ViewState::Scanning(spinner)) => spinner.tick(),
+            _ => {}
         }
     }
 
     pub async fn handle_key_event(&mut self, key_event: &KeyEvent) -> Result<(), String> {
         if key_event.kind == KeyEventKind::Press && self.error.is_none() {
             match self.view {
-                View::PeripheralList => match key_event.code {
+                View::Peripheral(ViewState::Idle) => match key_event.code {
                     KeyCode::Char('s') => self.get_peripherals().await?,
-                    KeyCode::Enter
-                        if !self.state.get_local_names().is_empty()
-                            && self.characteristic_scan_spinner.is_none() =>
-                    {
+                    KeyCode::Enter if !self.state.get_local_names().is_empty() => {
                         if let KeyCode::Enter = key_event.code {
                             let local_names = self.state.get_local_names();
                             let index = self.state.get_peripheral_index();
@@ -76,12 +74,13 @@ impl HomePage {
                     KeyCode::Down => self.state.update_peripheral_index(1),
                     _ => {}
                 },
-                View::CharacteristicList => match key_event.code {
-                    KeyCode::Backspace => self.view = View::PeripheralList,
+                View::Characteristic(ViewState::Idle) => match key_event.code {
+                    KeyCode::Backspace => self.view = View::Peripheral(ViewState::Idle),
                     KeyCode::Up => self.state.update_characteristic_index(-1),
                     KeyCode::Down => self.state.update_characteristic_index(1),
                     _ => {}
                 },
+                _ => {}
             }
         } else if key_event.kind == KeyEventKind::Press && self.error.is_some() {
             if let KeyCode::Char('q') = key_event.code {
@@ -95,28 +94,26 @@ impl HomePage {
     pub async fn handle_page_event(&mut self, event: HomePageEvent) -> Result<(), String> {
         match event {
             HomePageEvent::PeripheralScanStarted => {
-                self.peripheral_scan_spinner = Some(Spinner::default());
+                self.view = View::Peripheral(ViewState::Scanning(Spinner::default()))
             }
             HomePageEvent::PeripheralScanComplete(local_names) => {
-                self.peripheral_scan_spinner = None;
-                self.view = View::PeripheralList;
+                self.view = View::Peripheral(ViewState::Idle);
                 self.state.clear_characteristics(local_names.len());
                 self.state.update_local_names(local_names);
             }
             HomePageEvent::PeripheralScanError(err) => {
-                self.peripheral_scan_spinner = None;
+                self.view = View::Peripheral(ViewState::Idle);
                 self.error = Some(err);
             }
             HomePageEvent::CharacteristicScanStarted => {
-                self.characteristic_scan_spinner = Some(Spinner::default())
+                self.view = View::Characteristic(ViewState::Scanning(Spinner::default()))
             }
             HomePageEvent::CharacteristicScanComplete(characteristics) => {
-                self.characteristic_scan_spinner = None;
-                self.view = View::CharacteristicList;
+                self.view = View::Characteristic(ViewState::Idle);
                 self.state.update_characteristics(characteristics);
             }
             HomePageEvent::CharacteristicScanError(err) => {
-                self.characteristic_scan_spinner = None;
+                self.view = View::Peripheral(ViewState::Idle);
                 self.error = Some(err);
             }
         }
@@ -171,7 +168,7 @@ impl HomePage {
             .title_bottom(instructions.centered());
 
         let view_specific_cmds = match self.view {
-            View::PeripheralList => Line::from(vec![
+            View::Peripheral(_) => Line::from(vec![
                 " View Characteristics ".into(),
                 " <Enter> ".blue().bold(),
                 " Up ".into(),
@@ -179,7 +176,7 @@ impl HomePage {
                 " Down ".into(),
                 " <Down> ".blue().bold(),
             ]),
-            View::CharacteristicList => Line::from(vec![
+            View::Characteristic(_) => Line::from(vec![
                 " Go pack to peripheral view ".into(),
                 "<Backspace>".blue().bold(),
             ]),
@@ -302,19 +299,18 @@ impl HomePage {
 
         data_block.clone().render(area, buf);
 
-        if let Some(peripheral_scan_spinner) = &self.peripheral_scan_spinner {
-            self.render_peripheral_scan_spinner(area, buf, peripheral_scan_spinner, &data_block)
-        } else if let Some(characteristic_scan_spinner) = &self.characteristic_scan_spinner {
-            self.render_characteristic_scan_spinner(
-                area,
-                buf,
-                characteristic_scan_spinner,
-                &data_block,
-            )
-        } else {
-            match self.view {
-                View::PeripheralList => self.render_peripheral_names(area, buf, &data_block),
-                View::CharacteristicList => self.render_characteristics(area, buf, &data_block),
+        match &self.view {
+            View::Peripheral(ViewState::Idle) => {
+                self.render_peripheral_names(area, buf, &data_block)
+            }
+            View::Peripheral(ViewState::Scanning(spinner)) => {
+                self.render_peripheral_scan_spinner(area, buf, spinner, &data_block)
+            }
+            View::Characteristic(ViewState::Idle) => {
+                self.render_characteristics(area, buf, &data_block)
+            }
+            View::Characteristic(ViewState::Scanning(spinner)) => {
+                self.render_characteristic_scan_spinner(area, buf, spinner, &data_block)
             }
         }
     }
