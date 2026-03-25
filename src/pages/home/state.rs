@@ -55,7 +55,7 @@ impl State {
     }
 
     pub fn update_characteristic_index(&mut self, update: i8) {
-        let len = self.characteristics.len();
+        let len = self.characteristics[self.peripheral_index].len();
 
         let index = if len == 0 {
             0
