@@ -67,20 +67,21 @@ impl HomePage {
                     {
                         if let KeyCode::Enter = key_event.code {
                             let local_names = self.state.get_local_names();
-                            let index = self.state.get_index();
+                            let index = self.state.get_peripheral_index();
                             let local_name = &local_names[index];
                             self.get_characteristics(local_name).await?
                         }
                     }
-                    KeyCode::Up => self.state.update_index(-1),
-                    KeyCode::Down => self.state.update_index(1),
+                    KeyCode::Up => self.state.update_peripheral_index(-1),
+                    KeyCode::Down => self.state.update_peripheral_index(1),
                     _ => {}
                 },
-                View::CharacteristicList => {
-                    if key_event.code == KeyCode::Backspace {
-                        self.view = View::PeripheralList
-                    }
-                }
+                View::CharacteristicList => match key_event.code {
+                    KeyCode::Backspace => self.view = View::PeripheralList,
+                    KeyCode::Up => self.state.update_characteristic_index(-1),
+                    KeyCode::Down => self.state.update_characteristic_index(1),
+                    _ => {}
+                },
             }
         } else if key_event.kind == KeyEventKind::Press && self.error.is_some() {
             if let KeyCode::Char('q') = key_event.code {
@@ -194,7 +195,7 @@ impl HomePage {
 
     fn render_peripheral_names(&self, area: Rect, buf: &mut Buffer, block: &Block) {
         let local_names = self.state.get_local_names();
-        let index = self.state.get_index();
+        let index = self.state.get_peripheral_index();
 
         let scan_list: Vec<ListItem> = local_names
             .iter()
@@ -215,9 +216,6 @@ impl HomePage {
     }
 
     fn render_characteristics(&self, area: Rect, buf: &mut Buffer, block: &Block) {
-        let mut characteristic_list_state = ListState::default();
-        characteristic_list_state.select(Some(0));
-
         let characteristics_entry = self
             .state
             .get_characteristics()
@@ -225,8 +223,14 @@ impl HomePage {
             .map(|c| ListItem::new(Line::from(c.to_string()).alignment(Alignment::Center)))
             .collect::<Vec<ListItem>>();
 
+        let index = self.state.get_characteristic_index();
+        let mut characteristic_list_state = ListState::default();
+        characteristic_list_state.select(Some(index));
+
         StatefulWidget::render(
-            List::new(characteristics_entry).block(block.clone()),
+            List::new(characteristics_entry)
+                .block(block.clone())
+                .highlight_style(Style::new().bold().green()),
             area,
             buf,
             &mut characteristic_list_state,
