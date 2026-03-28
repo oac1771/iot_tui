@@ -1,6 +1,6 @@
 use crate::pages::home::HomePageEvent;
 use futures_util::StreamExt;
-use iot_sdk::{Characteristic, Peripheral, central::Central};
+use iot_sdk::{Characteristic, Peripheral, PlatformPeripheral, central::Central};
 use tokio::{
     select,
     sync::mpsc::Sender,
@@ -69,35 +69,18 @@ impl Peripherals {
 
         tokio::spawn(async move {
             let characteristics_result = async {
-                let peripheral = central
-                    .find_peripheral(&local_name)
-                    .await
-                    .map_err(|e| e.to_string())?;
+                let peripheral = get_peripheral(&local_name, central).await?;
 
-                let connection_result = select! {
-                    result = peripheral.connect() => result.map_err(|e| e.to_string()),
-                    _ = sleep(Duration::from_secs(5)) => Err(format!("Timed out connecting to {local_name} Peripheral"))
-                };
+                let characteristics = peripheral
+                    .characteristics()
+                    .iter()
+                    .cloned()
+                    .collect::<Vec<Characteristic>>();
 
-                if let Err(err) = connection_result {
-                    Err(err)
-                } else {
-                    let characteristics = peripheral
-                        .characteristics()
-                        .iter()
-                        .cloned()
-                        .collect::<Vec<Characteristic>>();
-
-                    Ok(characteristics)
-                }
+                Ok(characteristics)
             };
 
-            let result = select! {
-                result = characteristics_result => result,
-                _ = sleep(Duration::from_secs(10)) => Err(format!("Timed out Loading characteristics metadata for {local_name} Peripheral"))
-            };
-
-            let event = match result {
+            let event = match characteristics_result.await {
                 Ok(characteristics) => HomePageEvent::CharacteristicScanComplete(characteristics),
                 Err(err) => HomePageEvent::CharacteristicScanError(err),
             };
@@ -148,4 +131,20 @@ impl Peripherals {
     // }
 }
 
-// fn get_peripheral() {}
+async fn get_peripheral(
+    local_name: &str,
+    central: Central,
+) -> Result<PlatformPeripheral, String> {
+
+    let peripheral = select! {
+        result = central.find_peripheral(local_name) => result.map_err(|e| e.to_string()),
+        _ = sleep(Duration::from_secs(5)) => Err(format!("Timed out looking for {local_name} Peripheral"))
+    }?;
+
+    select! {
+        result = peripheral.connect() => result.map_err(|e| e.to_string()),
+        _ = sleep(Duration::from_secs(5)) => Err(format!("Timed out connecting to {local_name} Peripheral"))
+    }?;
+
+    Ok(peripheral)
+}
