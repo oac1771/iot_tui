@@ -18,6 +18,7 @@ pub struct HomePage {
     view: View,
     error: Option<String>,
     home_page_event_tx: Sender<HomePageEvent>,
+    peripherals: Peripherals,
 }
 
 pub enum HomePageEvent {
@@ -27,6 +28,7 @@ pub enum HomePageEvent {
     CharacteristicScanStarted,
     CharacteristicScanComplete(Vec<Characteristic>),
     CharacteristicScanError(String),
+    CharacteristicCallStarted,
 }
 
 enum View {
@@ -40,13 +42,17 @@ enum ViewState {
 }
 
 impl HomePage {
-    pub fn new(home_page_event_tx: Sender<HomePageEvent>) -> Self {
-        Self {
+    pub async fn new(home_page_event_tx: Sender<HomePageEvent>) -> Result<Self, String> {
+        let peripherals = Peripherals::new().await?;
+        let home_page = Self {
             state: State::default(),
             error: None,
             view: View::Peripheral(ViewState::Idle),
             home_page_event_tx,
-        }
+            peripherals,
+        };
+
+        Ok(home_page)
     }
 
     pub async fn tick(&mut self) {
@@ -61,29 +67,37 @@ impl HomePage {
         if key_event.kind == KeyEventKind::Press && self.error.is_none() {
             match self.view {
                 View::Peripheral(ViewState::Idle) => match key_event.code {
-                    KeyCode::Char('s') => self.get_peripherals().await?,
+                    KeyCode::Char('s') => {
+                        self.peripherals
+                            .get_peripherals(&self.home_page_event_tx)
+                            .await?
+                    }
                     KeyCode::Enter if !self.state.get_local_names().is_empty() => {
-                        if let KeyCode::Enter = key_event.code {
-                            let local_names = self.state.get_local_names();
-                            let index = self.state.get_peripheral_index();
-                            let local_name = &local_names[index];
-                            self.get_characteristics(local_name).await?
-                        }
+                        let local_names = self.state.get_local_names();
+                        let index = self.state.get_peripheral_index();
+                        let local_name = &local_names[index];
+                        self.get_characteristics(local_name).await?
                     }
                     KeyCode::Up => self.state.update_peripheral_index(-1),
                     KeyCode::Down => self.state.update_peripheral_index(1),
                     _ => {}
                 },
                 View::Characteristic(ViewState::Idle) => match key_event.code {
-                    KeyCode::Backspace => self.view = View::Peripheral(ViewState::Idle),
+                    KeyCode::Esc => self.view = View::Peripheral(ViewState::Idle),
                     KeyCode::Up => self.state.update_characteristic_index(-1),
                     KeyCode::Down => self.state.update_characteristic_index(1),
+                    // KeyCode::Enter if !self.state.get_characteristics().is_empty() => {
+                    //     let characteristics = self.state.get_characteristics();
+                    //     let index = self.state.get_characteristic_index();
+                    //     let characteristic = &characteristics[index];
+                    //     self.call_characteristic(characteristic).await?
+                    // }
                     _ => {}
                 },
                 _ => {}
             }
         } else if key_event.kind == KeyEventKind::Press && self.error.is_some() {
-            if let KeyCode::Char('q') = key_event.code {
+            if let KeyCode::Esc = key_event.code {
                 self.error = None
             }
         }
@@ -116,19 +130,19 @@ impl HomePage {
                 self.view = View::Peripheral(ViewState::Idle);
                 self.error = Some(err);
             }
+            HomePageEvent::CharacteristicCallStarted => {
+                self.view = View::Characteristic(ViewState::Scanning(Spinner::default()))
+            }
         }
-        Ok(())
-    }
-
-    async fn get_peripherals(&self) -> Result<(), String> {
-        Peripherals::get_peripherals(&self.home_page_event_tx).await?;
         Ok(())
     }
 
     async fn get_characteristics(&self, local_name: &str) -> Result<(), String> {
         let characteristics = self.state.get_characteristics();
         if characteristics.is_empty() {
-            Peripherals::get_characteristics(&self.home_page_event_tx, local_name).await?;
+            self.peripherals
+                .get_characteristics(&self.home_page_event_tx, local_name)
+                .await?;
         } else {
             let _ = self
                 .home_page_event_tx
@@ -141,6 +155,11 @@ impl HomePage {
         Ok(())
     }
 
+    // async fn call_characteristic(&self, characteristic: &Characteristic) -> Result<(), String> {
+    //     Peripherals::call_characteristic(&self.home_page_event_tx, characteristic).await?;
+    //     Ok(())
+    // }
+
     fn render_title_area(&self, area: Rect, buf: &mut Buffer) {
         let layout = Layout::default()
             .direction(Direction::Horizontal)
@@ -148,8 +167,11 @@ impl HomePage {
 
         let [cmd_area, meta_data_area] = layout.areas(area);
 
+        let instructions = Line::from(vec![" Quit ".into(), "<Ctrl + c> ".blue().bold()]);
+
         let cmd_block = Block::bordered()
             .title(Line::from("  Commands  ").bold().centered())
+            .title_bottom(instructions.centered())
             .border_set(border::DOUBLE);
 
         let cmds = Line::from(vec![" Scan ".into(), "<s>".blue().bold()]);
@@ -161,11 +183,7 @@ impl HomePage {
             .wrap(Wrap { trim: true })
             .render(cmd_area, buf);
 
-        let instructions = Line::from(vec![" Quit ".into(), "<Ctrl + c> ".blue().bold()]);
-
-        let meta_data_block = Block::bordered()
-            .border_set(border::DOUBLE)
-            .title_bottom(instructions.centered());
+        let meta_data_block = Block::bordered().border_set(border::DOUBLE);
 
         let view_specific_cmds = match self.view {
             View::Peripheral(_) => Line::from(vec![
@@ -178,7 +196,7 @@ impl HomePage {
             ]),
             View::Characteristic(_) => Line::from(vec![
                 " Go pack to peripheral view ".into(),
-                "<Backspace>".blue().bold(),
+                "<Esc>".blue().bold(),
             ]),
         };
 
@@ -297,8 +315,6 @@ impl HomePage {
             .title(Line::from(" ***** ").bold().centered())
             .border_set(border::DOUBLE);
 
-        data_block.clone().render(area, buf);
-
         match &self.view {
             View::Peripheral(ViewState::Idle) => {
                 self.render_peripheral_names(area, buf, &data_block)
@@ -313,10 +329,12 @@ impl HomePage {
                 self.render_characteristic_scan_spinner(area, buf, spinner, &data_block)
             }
         }
+
+        data_block.render(area, buf);
     }
 
     fn render_error_popup(&self, area: Rect, buf: &mut Buffer, err: &str) {
-        let instructions = Line::from(vec![" Exit ".into(), "<q> ".blue().bold()]);
+        let instructions = Line::from(vec![" Exit ".into(), "<Esc> ".blue().bold()]);
 
         let block = Block::bordered()
             .title(Line::from("  Error!  ").bold().centered())

@@ -23,15 +23,18 @@ enum PageKind {
 }
 
 impl App {
-    pub fn new() -> Self {
+    pub async fn new() -> Result<Self, String> {
         let (home_page_event_tx, home_page_event_rx) = mpsc::channel(50);
+        let home_page = HomePage::new(home_page_event_tx).await?;
 
-        Self {
-            home_page: HomePage::new(home_page_event_tx),
+        let app = Self {
+            home_page,
             home_page_event_rx,
             active_page: PageKind::Home,
             exit: false,
-        }
+        };
+
+        Ok(app)
     }
 
     pub async fn run(mut self, terminal: &mut DefaultTerminal) -> std::io::Result<()> {

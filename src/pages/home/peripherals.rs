@@ -7,21 +7,28 @@ use tokio::{
     time::{Duration, sleep},
 };
 
-pub struct Peripherals;
+pub struct Peripherals(Central);
 
 impl Peripherals {
-    pub async fn get_peripherals(home_page_event_tx: &Sender<HomePageEvent>) -> Result<(), String> {
+    pub async fn new() -> Result<Self, String> {
+        let central = Central::new().await.map_err(|e| e.to_string())?;
+        Ok(Self(central))
+    }
+
+    pub async fn get_peripherals(
+        &self,
+        home_page_event_tx: &Sender<HomePageEvent>,
+    ) -> Result<(), String> {
         home_page_event_tx
             .send(HomePageEvent::PeripheralScanStarted)
             .await
             .map_err(|err| err.to_string())?;
 
         let tx = home_page_event_tx.clone();
+        let central = self.0.clone();
 
         tokio::spawn(async move {
             let result = async {
-                let central = Central::new().await.map_err(|e| e.to_string())?;
-
                 let peripherals = central
                     .peripheral_properties()
                     .await
@@ -47,6 +54,7 @@ impl Peripherals {
     }
 
     pub async fn get_characteristics(
+        &self,
         home_page_event_tx: &Sender<HomePageEvent>,
         local_name: &str,
     ) -> Result<(), String> {
@@ -57,10 +65,10 @@ impl Peripherals {
 
         let tx = home_page_event_tx.clone();
         let local_name = local_name.to_string();
+        let central = self.0.clone();
 
         tokio::spawn(async move {
             let characteristics_result = async {
-                let central = Central::new().await.map_err(|e| e.to_string())?;
                 let peripheral = central
                     .find_peripheral(&local_name)
                     .await
@@ -99,4 +107,45 @@ impl Peripherals {
 
         Ok(())
     }
+
+    // pub async fn call_characteristic(
+    //     home_page_event_tx: &Sender<HomePageEvent>,
+    //     characteristic: &Characteristic,
+    // ) -> Result<(), String> {
+    //     home_page_event_tx
+    //         .send(HomePageEvent::CharacteristicScanStarted)
+    //         .await
+    //         .map_err(|err| err.to_string())?;
+
+    //     let tx = home_page_event_tx.clone();
+    //     let characteristic = characteristic.clone();
+
+    //     tokio::spawn(async move {
+
+    //         let properties = characteristic.properties;
+
+    //         let characteristics_result = async {
+    //             let central = Central::new().await.map_err(|e| e.to_string())?;
+    //             let peripheral = central
+    //                 .find_peripheral(&local_name)
+    //                 .await
+    //                 .map_err(|e| e.to_string())?;
+
+    //             let connection_result = select! {
+    //                 result = peripheral.connect() => result.map_err(|e| e.to_string()),
+    //                 _ = sleep(Duration::from_secs(5)) => Err(format!("Timed out connecting to {local_name} Peripheral"))
+    //             };
+
+    //             if let Err(err) = connection_result {
+    //                 Err(err)
+    //             } else {
+    //                 Ok(peripheral)
+    //             }
+    //         };
+    //     });
+
+    //     Ok(())
+    // }
 }
+
+// fn get_peripheral() {}
