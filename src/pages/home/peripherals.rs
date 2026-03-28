@@ -91,44 +91,39 @@ impl Peripherals {
         Ok(())
     }
 
-    // pub async fn call_characteristic(
-    //     home_page_event_tx: &Sender<HomePageEvent>,
-    //     characteristic: &Characteristic,
-    // ) -> Result<(), String> {
-    //     home_page_event_tx
-    //         .send(HomePageEvent::CharacteristicScanStarted)
-    //         .await
-    //         .map_err(|err| err.to_string())?;
+    pub async fn _call_characteristic(&self,
+        local_name: &str,
+        home_page_event_tx: &Sender<HomePageEvent>,
+        characteristic: &Characteristic,
+    ) -> Result<(), String> {
+        home_page_event_tx
+            .send(HomePageEvent::CharacteristicScanStarted)
+            .await
+            .map_err(|err| err.to_string())?;
 
-    //     let tx = home_page_event_tx.clone();
-    //     let characteristic = characteristic.clone();
+        let _tx = home_page_event_tx.clone();
+        let characteristic = characteristic.clone();
+        let local_name = local_name.to_string();
+        let central = self.0.clone();
 
-    //     tokio::spawn(async move {
+        tokio::spawn(async move {
 
-    //         let properties = characteristic.properties;
+            let _properties = characteristic.properties;
 
-    //         let characteristics_result = async {
-    //             let central = Central::new().await.map_err(|e| e.to_string())?;
-    //             let peripheral = central
-    //                 .find_peripheral(&local_name)
-    //                 .await
-    //                 .map_err(|e| e.to_string())?;
+            let call_result = async {
+                let _peripheral = get_peripheral(&local_name, central).await?;
 
-    //             let connection_result = select! {
-    //                 result = peripheral.connect() => result.map_err(|e| e.to_string()),
-    //                 _ = sleep(Duration::from_secs(5)) => Err(format!("Timed out connecting to {local_name} Peripheral"))
-    //             };
+                Ok::<(), String>(())
 
-    //             if let Err(err) = connection_result {
-    //                 Err(err)
-    //             } else {
-    //                 Ok(peripheral)
-    //             }
-    //         };
-    //     });
+            };
 
-    //     Ok(())
-    // }
+            let _event = match call_result.await {
+                _ => {}
+            };
+        });
+
+        Ok(())
+    }
 }
 
 async fn get_peripheral(
