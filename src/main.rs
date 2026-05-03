@@ -7,8 +7,14 @@ use app::App;
 #[tokio::main]
 async fn main() {
     let mut terminal = ratatui::init();
-    if let Err(err) = App::new().await.unwrap().run(&mut terminal).await {
-        eprintln!("{err}")
-    };
+    match App::new().await {
+        Ok(app) => {
+            if let Err(err) = app.run(&mut terminal).await {
+                eprintln!("{err}")
+            };
+        }
+        Err(err) => eprintln!("{err}"),
+    }
+
     ratatui::restore();
 }

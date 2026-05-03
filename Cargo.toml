@@ -12,3 +12,5 @@ tokio = { version = "1.44.1", features = ["rt-multi-thread", "macros"] }
 
 iot_sdk = { path = "../iot_sdk" }
 # iot_sdk = { git = "https://github.com/oac1771/iot_sdk", tag = "0.0.0-rc0" }
+
+color-eyre = "0.6"

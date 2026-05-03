@@ -91,7 +91,8 @@ impl Peripherals {
         Ok(())
     }
 
-    pub async fn _call_characteristic(&self,
+    pub async fn _call_characteristic(
+        &self,
         local_name: &str,
         home_page_event_tx: &Sender<HomePageEvent>,
         characteristic: &Characteristic,
@@ -107,14 +108,12 @@ impl Peripherals {
         let central = self.0.clone();
 
         tokio::spawn(async move {
-
             let _properties = characteristic.properties;
 
             let call_result = async {
                 let _peripheral = get_peripheral(&local_name, central).await?;
 
                 Ok::<(), String>(())
-
             };
 
             let _event = match call_result.await {
@@ -126,11 +125,7 @@ impl Peripherals {
     }
 }
 
-async fn get_peripheral(
-    local_name: &str,
-    central: Central,
-) -> Result<PlatformPeripheral, String> {
-
+async fn get_peripheral(local_name: &str, central: Central) -> Result<PlatformPeripheral, String> {
     let peripheral = select! {
         result = central.find_peripheral(local_name) => result.map_err(|e| e.to_string()),
         _ = sleep(Duration::from_secs(5)) => Err(format!("Timed out looking for {local_name} Peripheral"))
