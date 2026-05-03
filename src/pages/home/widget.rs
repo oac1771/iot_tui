@@ -29,6 +29,7 @@ pub enum HomePageEvent {
     CharacteristicScanComplete(Vec<Characteristic>),
     CharacteristicScanError(String),
     CharacteristicCallStarted,
+    ScanningMessageUpdate(String),
 }
 
 enum View {
@@ -38,7 +39,7 @@ enum View {
 
 enum ViewState {
     Idle,
-    Scanning(Spinner),
+    Scanning((Spinner, String)),
 }
 
 impl HomePage {
@@ -57,8 +58,8 @@ impl HomePage {
 
     pub async fn tick(&mut self) {
         match &mut self.view {
-            View::Peripheral(ViewState::Scanning(spinner)) => spinner.tick(),
-            View::Characteristic(ViewState::Scanning(spinner)) => spinner.tick(),
+            View::Peripheral(ViewState::Scanning((spinner, _))) => spinner.tick(),
+            View::Characteristic(ViewState::Scanning((spinner, _))) => spinner.tick(),
             _ => {}
         }
     }
@@ -108,7 +109,8 @@ impl HomePage {
     pub async fn handle_page_event(&mut self, event: HomePageEvent) -> Result<(), String> {
         match event {
             HomePageEvent::PeripheralScanStarted => {
-                self.view = View::Peripheral(ViewState::Scanning(Spinner::default()))
+                self.view =
+                    View::Peripheral(ViewState::Scanning((Spinner::default(), String::new())))
             }
             HomePageEvent::PeripheralScanComplete(local_names) => {
                 self.view = View::Peripheral(ViewState::Idle);
@@ -120,7 +122,8 @@ impl HomePage {
                 self.error = Some(err);
             }
             HomePageEvent::CharacteristicScanStarted => {
-                self.view = View::Characteristic(ViewState::Scanning(Spinner::default()))
+                self.view =
+                    View::Characteristic(ViewState::Scanning((Spinner::default(), String::new())))
             }
             HomePageEvent::CharacteristicScanComplete(characteristics) => {
                 self.view = View::Characteristic(ViewState::Idle);
@@ -131,7 +134,18 @@ impl HomePage {
                 self.error = Some(err);
             }
             HomePageEvent::CharacteristicCallStarted => {
-                self.view = View::Characteristic(ViewState::Scanning(Spinner::default()))
+                self.view =
+                    View::Characteristic(ViewState::Scanning((Spinner::default(), String::new())))
+            }
+            HomePageEvent::ScanningMessageUpdate(message) => {
+                let view_state = match &mut self.view {
+                    View::Characteristic(state) => state,
+                    View::Peripheral(state) => state,
+                };
+
+                if let ViewState::Scanning((_, scanning_message)) = view_state {
+                    *scanning_message = message
+                }
             }
         }
         Ok(())
@@ -258,6 +272,7 @@ impl HomePage {
         buf: &mut Buffer,
         spinner: &Spinner,
         block: &Block,
+        scanning_message: &str,
     ) {
         let inner = block.inner(area);
 
@@ -272,11 +287,15 @@ impl HomePage {
 
         let center_area = layout[1];
 
-        let paragraph = Paragraph::new(vec![
-            Line::raw("Scanning For Peripherals..."),
-            Line::from(spinner.frame()).bold(),
-        ])
-        .alignment(Alignment::Center);
+        let message = if !scanning_message.is_empty() {
+            scanning_message
+        } else {
+            "Scanning For Peripherals..."
+        };
+
+        let paragraph =
+            Paragraph::new(vec![Line::raw(message), Line::from(spinner.frame()).bold()])
+                .alignment(Alignment::Center);
 
         paragraph.render(center_area, buf);
     }
@@ -287,6 +306,7 @@ impl HomePage {
         buf: &mut Buffer,
         spinner: &Spinner,
         block: &Block,
+        scanning_message: &str,
     ) {
         let inner = block.inner(area);
 
@@ -301,11 +321,15 @@ impl HomePage {
 
         let center_area = layout[1];
 
-        let paragraph = Paragraph::new(vec![
-            Line::raw("Scanning For Characteristics..."),
-            Line::from(spinner.frame()).bold(),
-        ])
-        .alignment(Alignment::Center);
+        let message = if !scanning_message.is_empty() {
+            scanning_message
+        } else {
+            "Scanning For Characteristics..."
+        };
+
+        let paragraph =
+            Paragraph::new(vec![Line::raw(message), Line::from(spinner.frame()).bold()])
+                .alignment(Alignment::Center);
 
         paragraph.render(center_area, buf);
     }
@@ -319,15 +343,14 @@ impl HomePage {
             View::Peripheral(ViewState::Idle) => {
                 self.render_peripheral_names(area, buf, &data_block)
             }
-            View::Peripheral(ViewState::Scanning(spinner)) => {
-                self.render_peripheral_scan_spinner(area, buf, spinner, &data_block)
+            View::Peripheral(ViewState::Scanning((spinner, scanning_msg))) => {
+                self.render_peripheral_scan_spinner(area, buf, spinner, &data_block, scanning_msg)
             }
             View::Characteristic(ViewState::Idle) => {
                 self.render_characteristics(area, buf, &data_block)
             }
-            View::Characteristic(ViewState::Scanning(spinner)) => {
-                self.render_characteristic_scan_spinner(area, buf, spinner, &data_block)
-            }
+            View::Characteristic(ViewState::Scanning((spinner, scanning_msg))) => self
+                .render_characteristic_scan_spinner(area, buf, spinner, &data_block, scanning_msg),
         }
 
         data_block.render(area, buf);

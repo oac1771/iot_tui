@@ -69,7 +69,7 @@ impl Peripherals {
 
         tokio::spawn(async move {
             let characteristics_result = async {
-                let peripheral = get_peripheral(&local_name, central).await?;
+                let peripheral = get_peripheral(&local_name, central, &tx).await?;
 
                 let characteristics = peripheral
                     .characteristics()
@@ -102,7 +102,7 @@ impl Peripherals {
             .await
             .map_err(|err| err.to_string())?;
 
-        let _tx = home_page_event_tx.clone();
+        let tx = home_page_event_tx.clone();
         let characteristic = characteristic.clone();
         let local_name = local_name.to_string();
         let central = self.0.clone();
@@ -110,14 +110,10 @@ impl Peripherals {
         tokio::spawn(async move {
             let _properties = characteristic.properties;
 
-            let call_result = async {
-                let _peripheral = get_peripheral(&local_name, central).await?;
+            let _call_result = async {
+                let _peripheral = get_peripheral(&local_name, central, &tx).await?;
 
                 Ok::<(), String>(())
-            };
-
-            let _event = match call_result.await {
-                _ => {}
             };
         });
 
@@ -125,11 +121,27 @@ impl Peripherals {
     }
 }
 
-async fn get_peripheral(local_name: &str, central: Central) -> Result<PlatformPeripheral, String> {
+async fn get_peripheral(
+    local_name: &str,
+    central: Central,
+    tx: &Sender<HomePageEvent>,
+) -> Result<PlatformPeripheral, String> {
+    let _ = tx
+        .send(HomePageEvent::ScanningMessageUpdate(format!(
+            "Looking for {local_name} Peripheral"
+        )))
+        .await;
+
     let peripheral = select! {
         result = central.find_peripheral(local_name) => result.map_err(|e| e.to_string()),
         _ = sleep(Duration::from_secs(5)) => Err(format!("Timed out looking for {local_name} Peripheral"))
     }?;
+
+    let _ = tx
+        .send(HomePageEvent::ScanningMessageUpdate(format!(
+            "Connecting to {local_name} Peripheral"
+        )))
+        .await;
 
     select! {
         result = peripheral.connect() => result.map_err(|e| e.to_string()),
