@@ -74,10 +74,10 @@ impl HomePage {
                             .await?
                     }
                     KeyCode::Enter if !self.state.get_local_names().is_empty() => {
-                        let local_names = self.state.get_local_names();
+                        let peripherals = self.state.get_peripherals();
                         let index = self.state.get_peripheral_index();
-                        let local_name = &local_names[index];
-                        self.get_characteristics(local_name).await?
+                        let peripheral = &peripherals[index];
+                        self.get_characteristics(peripheral).await?
                     }
                     KeyCode::Up => self.state.update_peripheral_index(-1),
                     KeyCode::Down => self.state.update_peripheral_index(1),
@@ -152,11 +152,11 @@ impl HomePage {
         Ok(())
     }
 
-    async fn get_characteristics(&self, local_name: &str) -> Result<(), String> {
+    async fn get_characteristics(&self, peripheral: &PlatformPeripheral) -> Result<(), String> {
         let characteristics = self.state.get_characteristics();
         if characteristics.is_empty() {
             self.peripherals
-                .get_characteristics(&self.home_page_event_tx, local_name)
+                .get_characteristics(&self.home_page_event_tx, peripheral)
                 .await?;
         } else {
             let _ = self

@@ -16,6 +16,10 @@ impl State {
         &self.local_names
     }
 
+    pub fn get_peripherals(&self) -> &Vec<PlatformPeripheral> {
+        &self.peripherals
+    }
+
     pub fn get_characteristics(&self) -> &Vec<Characteristic> {
         &self.characteristics[self.peripheral_index]
     }

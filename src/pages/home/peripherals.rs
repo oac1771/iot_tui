@@ -55,7 +55,7 @@ impl Peripherals {
     pub async fn get_characteristics(
         &self,
         home_page_event_tx: &Sender<HomePageEvent>,
-        local_name: &str,
+        peripheral: &PlatformPeripheral,
     ) -> Result<(), String> {
         home_page_event_tx
             .send(HomePageEvent::CharacteristicScanStarted)
@@ -63,12 +63,11 @@ impl Peripherals {
             .map_err(|err| err.to_string())?;
 
         let tx = home_page_event_tx.clone();
-        let local_name = local_name.to_string();
-        let central = self.0.clone();
+        let peripheral = peripheral.clone();
 
         tokio::spawn(async move {
             let characteristics_result = async {
-                let peripheral = get_peripheral(&local_name, central, &tx).await?;
+                let peripheral = get_peripheral(peripheral, &tx).await?;
 
                 let characteristics = peripheral
                     .characteristics()
@@ -92,7 +91,7 @@ impl Peripherals {
 
     pub async fn _call_characteristic(
         &self,
-        local_name: &str,
+        _local_name: &str,
         home_page_event_tx: &Sender<HomePageEvent>,
         characteristic: &Characteristic,
     ) -> Result<(), String> {
@@ -101,19 +100,15 @@ impl Peripherals {
             .await
             .map_err(|err| err.to_string())?;
 
-        let tx = home_page_event_tx.clone();
+        // let tx = home_page_event_tx.clone();
         let characteristic = characteristic.clone();
-        let local_name = local_name.to_string();
-        let central = self.0.clone();
+        // let local_name = local_name.to_string();
+        // let central = self.0.clone();
 
         tokio::spawn(async move {
             let _properties = characteristic.properties;
 
-            let _call_result = async {
-                let _peripheral = get_peripheral(&local_name, central, &tx).await?;
-
-                Ok::<(), String>(())
-            };
+            let _call_result = async { Ok::<(), String>(()) };
         });
 
         Ok(())
@@ -121,30 +116,18 @@ impl Peripherals {
 }
 
 async fn get_peripheral(
-    local_name: &str,
-    central: Central,
+    peripheral: PlatformPeripheral,
     tx: &Sender<HomePageEvent>,
 ) -> Result<PlatformPeripheral, String> {
     let _ = tx
-        .send(HomePageEvent::ScanningMessageUpdate(format!(
-            "Looking for {local_name} Peripheral"
-        )))
-        .await;
-
-    let peripheral = select! {
-        result = central.find_peripheral(local_name) => result.map_err(|e| e.to_string()),
-        _ = sleep(Duration::from_secs(5)) => Err(format!("Timed out looking for {local_name} Peripheral"))
-    }?;
-
-    let _ = tx
-        .send(HomePageEvent::ScanningMessageUpdate(format!(
-            "Connecting to {local_name} Peripheral"
-        )))
+        .send(HomePageEvent::ScanningMessageUpdate(
+            "Connecting to Peripheral".to_string(),
+        ))
         .await;
 
     select! {
         result = peripheral.connect() => result.map_err(|e| e.to_string()),
-        _ = sleep(Duration::from_secs(5)) => Err(format!("Timed out connecting to {local_name} Peripheral"))
+        _ = sleep(Duration::from_secs(5)) => Err("Timed out connecting to Peripheral".to_string())
     }?;
 
     Ok(peripheral)
