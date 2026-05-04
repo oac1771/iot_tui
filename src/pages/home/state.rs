@@ -1,4 +1,4 @@
-use iot_sdk::Characteristic;
+use iot_sdk::{Characteristic, Peripheral, PlatformPeripheral};
 
 use crate::utils::evaluate_wrapping_index;
 
@@ -6,6 +6,7 @@ use crate::utils::evaluate_wrapping_index;
 pub struct State {
     peripheral_index: usize,
     characteristic_index: usize,
+    peripherals: Vec<PlatformPeripheral>,
     local_names: Vec<String>,
     characteristics: Vec<Vec<Characteristic>>,
 }
@@ -27,8 +28,14 @@ impl State {
         self.characteristic_index
     }
 
-    pub fn update_local_names(&mut self, local_names: Vec<String>) {
-        self.local_names = local_names
+    pub async fn update_peripherals(&mut self, peripherals: Vec<PlatformPeripheral>) {
+        for p in &peripherals {
+            if let Some(local_name) = p.properties().await.unwrap().unwrap().local_name {
+                self.local_names.push(local_name)
+            }
+        }
+
+        self.peripherals = peripherals
     }
 
     pub fn update_characteristics(&mut self, characteristics: Vec<Characteristic>) {
@@ -39,8 +46,13 @@ impl State {
         self.characteristics = vec![vec![]; len]
     }
 
+    pub fn clear_peripherals(&mut self) {
+        self.local_names = Vec::new();
+        self.peripherals = Vec::new();
+    }
+
     pub fn update_peripheral_index(&mut self, update: i8) {
-        let len = self.local_names.len();
+        let len = self.peripherals.len();
 
         let index = if len == 0 {
             0

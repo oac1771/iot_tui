@@ -30,12 +30,11 @@ impl Peripherals {
         tokio::spawn(async move {
             let result = async {
                 let peripherals = central
-                    .peripheral_properties()
+                    .peripherals()
                     .await
                     .map_err(|e| e.to_string())?
-                    .filter_map(|p| async move { p.local_name })
                     .take(15)
-                    .collect::<Vec<String>>()
+                    .collect::<Vec<PlatformPeripheral>>()
                     .await;
 
                 Ok(peripherals)

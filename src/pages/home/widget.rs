@@ -2,7 +2,7 @@ use crate::utils::spinner::Spinner;
 
 use super::{State, peripherals::Peripherals};
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind};
-use iot_sdk::Characteristic;
+use iot_sdk::{Characteristic, PlatformPeripheral};
 use ratatui::{
     buffer::Buffer,
     layout::{Alignment, Constraint, Direction, Flex, Layout, Rect},
@@ -23,7 +23,7 @@ pub struct HomePage {
 
 pub enum HomePageEvent {
     PeripheralScanStarted,
-    PeripheralScanComplete(Vec<String>),
+    PeripheralScanComplete(Vec<PlatformPeripheral>),
     PeripheralScanError(String),
     CharacteristicScanStarted,
     CharacteristicScanComplete(Vec<Characteristic>),
@@ -109,13 +109,14 @@ impl HomePage {
     pub async fn handle_page_event(&mut self, event: HomePageEvent) -> Result<(), String> {
         match event {
             HomePageEvent::PeripheralScanStarted => {
+                self.state.clear_peripherals();
                 self.view =
                     View::Peripheral(ViewState::Scanning((Spinner::default(), String::new())))
             }
-            HomePageEvent::PeripheralScanComplete(local_names) => {
+            HomePageEvent::PeripheralScanComplete(peripherals) => {
                 self.view = View::Peripheral(ViewState::Idle);
-                self.state.clear_characteristics(local_names.len());
-                self.state.update_local_names(local_names);
+                self.state.clear_characteristics(peripherals.len());
+                self.state.update_peripherals(peripherals).await;
             }
             HomePageEvent::PeripheralScanError(err) => {
                 self.view = View::Peripheral(ViewState::Idle);
