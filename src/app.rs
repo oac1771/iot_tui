@@ -10,6 +10,8 @@ use tokio::{
     time::{self, Duration},
 };
 
+const TICK_IN_MILLISECONDS: u64 = 50;
+
 pub struct App {
     home_page: HomePage,
     home_page_event_rx: Receiver<HomePageEvent>,
@@ -39,7 +41,7 @@ impl App {
 
     pub async fn run(mut self, terminal: &mut DefaultTerminal) -> std::io::Result<()> {
         let mut reader = EventStream::new();
-        let mut tick = time::interval(Duration::from_millis(50));
+        let mut tick = time::interval(Duration::from_millis(TICK_IN_MILLISECONDS));
 
         while !self.exit {
             terminal.draw(|frame| {

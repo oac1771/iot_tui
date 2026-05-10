@@ -1,6 +1,6 @@
-use crate::utils::spinner::Spinner;
+use crate::utils::{peripherals::Peripherals, spinner::Spinner};
 
-use super::{State, peripherals::Peripherals};
+use super::State;
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind};
 use iot_sdk::{Characteristic, PlatformPeripheral};
 use ratatui::{
@@ -74,9 +74,7 @@ impl HomePage {
                             .await?
                     }
                     KeyCode::Enter if !self.state.get_local_names().is_empty() => {
-                        let peripherals = self.state.get_peripherals();
-                        let index = self.state.get_peripheral_index();
-                        let peripheral = &peripherals[index];
+                        let peripheral = self.state.get_indexed_peripheral();
                         self.get_characteristics(peripheral).await?
                     }
                     KeyCode::Up => self.state.update_peripheral_index(-1),

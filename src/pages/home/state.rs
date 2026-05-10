@@ -16,8 +16,8 @@ impl State {
         &self.local_names
     }
 
-    pub fn get_peripherals(&self) -> &Vec<PlatformPeripheral> {
-        &self.peripherals
+    pub fn get_indexed_peripheral(&self) -> &PlatformPeripheral {
+        &self.peripherals[self.peripheral_index]
     }
 
     pub fn get_characteristics(&self) -> &Vec<Characteristic> {
@@ -33,6 +33,7 @@ impl State {
     }
 
     pub async fn update_peripherals(&mut self, peripherals: Vec<PlatformPeripheral>) {
+        self.local_names.clear();
         for p in &peripherals {
             if let Some(local_name) = p.properties().await.unwrap().unwrap().local_name {
                 self.local_names.push(local_name)
