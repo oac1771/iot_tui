@@ -15,6 +15,5 @@ async fn main() {
         }
         Err(err) => eprintln!("{err}"),
     }
-
     ratatui::restore();
 }

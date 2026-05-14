@@ -1,4 +1,4 @@
-use crate::utils::{peripherals::Peripherals, spinner::Spinner};
+use crate::utils::{peripherals::PeripheralsClient, spinner::Spinner};
 
 use super::State;
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind};
@@ -11,14 +11,12 @@ use ratatui::{
     text::Line,
     widgets::{Block, Clear, List, ListItem, ListState, Paragraph, StatefulWidget, Widget, Wrap},
 };
-use tokio::sync::mpsc::Sender;
 
 pub struct HomePage {
     state: State,
     view: View,
     error: Option<String>,
-    home_page_event_tx: Sender<HomePageEvent>,
-    peripherals: Peripherals,
+    peripherals_client: PeripheralsClient,
 }
 
 pub enum HomePageEvent {
@@ -43,17 +41,15 @@ enum ViewState {
 }
 
 impl HomePage {
-    pub async fn new(home_page_event_tx: Sender<HomePageEvent>) -> Result<Self, String> {
-        let peripherals = Peripherals::new().await?;
+    pub fn new(peripherals_client: PeripheralsClient) -> Self {
         let home_page = Self {
             state: State::default(),
             error: None,
             view: View::Peripheral(ViewState::Idle),
-            home_page_event_tx,
-            peripherals,
+            peripherals_client,
         };
 
-        Ok(home_page)
+        home_page
     }
 
     pub async fn tick(&mut self) {
@@ -69,14 +65,12 @@ impl HomePage {
             match self.view {
                 View::Peripheral(ViewState::Idle) => match key_event.code {
                     KeyCode::Char('s') => {
-                        self.peripherals
-                            .get_peripherals(&self.home_page_event_tx)
-                            .await?
+                        self.peripherals_client.get_peripherals().await?;
                     }
-                    KeyCode::Enter if !self.state.get_local_names().is_empty() => {
-                        let peripheral = self.state.get_indexed_peripheral();
-                        self.get_characteristics(peripheral).await?
-                    }
+                    // KeyCode::Enter if !self.state.get_local_names().is_empty() => {
+                    //     let peripheral = self.state.get_indexed_peripheral();
+                    //     self.get_characteristics(peripheral).await?
+                    // }
                     KeyCode::Up => self.state.update_peripheral_index(-1),
                     KeyCode::Down => self.state.update_peripheral_index(1),
                     _ => {}
@@ -150,23 +144,23 @@ impl HomePage {
         Ok(())
     }
 
-    async fn get_characteristics(&self, peripheral: &PlatformPeripheral) -> Result<(), String> {
-        let characteristics = self.state.get_characteristics();
-        if characteristics.is_empty() {
-            self.peripherals
-                .get_characteristics(&self.home_page_event_tx, peripheral)
-                .await?;
-        } else {
-            let _ = self
-                .home_page_event_tx
-                .send(HomePageEvent::CharacteristicScanComplete(
-                    characteristics.clone(),
-                ))
-                .await;
-        }
+    // async fn get_characteristics(&self, peripheral: &PlatformPeripheral) -> Result<(), String> {
+    //     let characteristics = self.state.get_characteristics();
+    //     if characteristics.is_empty() {
+    //         self.peripherals
+    //             .get_characteristics(&self.home_page_event_tx, peripheral)
+    //             .await?;
+    //     } else {
+    //         let _ = self
+    //             .home_page_event_tx
+    //             .send(HomePageEvent::CharacteristicScanComplete(
+    //                 characteristics.clone(),
+    //             ))
+    //             .await;
+    //     }
 
-        Ok(())
-    }
+    //     Ok(())
+    // }
 
     // async fn call_characteristic(&self, characteristic: &Characteristic) -> Result<(), String> {
     //     Peripherals::call_characteristic(&self.home_page_event_tx, characteristic).await?;

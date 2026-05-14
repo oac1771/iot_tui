@@ -1,4 +1,4 @@
-use crate::pages::home::{HomePage, HomePageEvent};
+use crate::{pages::home::HomePage, utils::peripherals};
 use crossterm::event::{
     Event as CrosstermEvent, EventStream, KeyCode, KeyEvent, KeyEventKind, KeyModifiers,
 };
@@ -6,15 +6,12 @@ use futures_util::StreamExt;
 use ratatui::DefaultTerminal;
 use tokio::{
     select,
-    sync::mpsc::{self, Receiver},
     time::{self, Duration},
 };
 
 const TICK_IN_MILLISECONDS: u64 = 50;
 
 pub struct App {
-    home_page: HomePage,
-    home_page_event_rx: Receiver<HomePageEvent>,
     active_page: PageKind,
     exit: bool,
 }
@@ -26,12 +23,7 @@ enum PageKind {
 
 impl App {
     pub async fn new() -> Result<Self, String> {
-        let (home_page_event_tx, home_page_event_rx) = mpsc::channel(50);
-        let home_page = HomePage::new(home_page_event_tx).await?;
-
         let app = Self {
-            home_page,
-            home_page_event_rx,
             active_page: PageKind::Home,
             exit: false,
         };
@@ -42,6 +34,11 @@ impl App {
     pub async fn run(mut self, terminal: &mut DefaultTerminal) -> std::io::Result<()> {
         let mut reader = EventStream::new();
         let mut tick = time::interval(Duration::from_millis(TICK_IN_MILLISECONDS));
+        let (peripherals, peripherals_client, mut peripherals_req_tx) = peripherals::start()
+            .await
+            .map_err(|e| std::io::Error::other(e))?;
+
+        let mut home_page = HomePage::new(peripherals_client);
 
         while !self.exit {
             terminal.draw(|frame| {
@@ -49,7 +46,7 @@ impl App {
 
                 match &self.active_page {
                     PageKind::Home => {
-                        frame.render_widget(&self.home_page, area);
+                        frame.render_widget(&home_page, area);
                     }
                 }
             })?;
@@ -58,7 +55,7 @@ impl App {
                 _ = tick.tick() => {
                     match &mut self.active_page {
                         PageKind::Home => {
-                            self.home_page.tick().await;
+                            home_page.tick().await;
                             Ok(())
                         }
                     }
@@ -71,7 +68,7 @@ impl App {
 
                         match &mut self.active_page {
                             PageKind::Home => {
-                                self.home_page.handle_key_event(&key_event).await
+                                home_page.handle_key_event(&key_event).await
                             }
                         }
                     } else {
@@ -80,7 +77,11 @@ impl App {
 
                 }
 
-                Some(event) = self.home_page_event_rx.recv() => self.home_page.handle_page_event(event).await
+                Some(peripheral_client_request) = peripherals_req_tx.recv() => {
+                    let _response = peripherals.handle_request(peripheral_client_request).await;
+                    println!("request handled");
+                    Ok(())
+                }
 
             };
 

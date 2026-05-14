@@ -25,3 +25,5 @@ tutorials: https://ratatui.rs/tutorials/
 
             let _ = tx.send(event).await;
         });
+
+create peripheral that runs in tokio spawn with Peripheral client that the pages take as argument
