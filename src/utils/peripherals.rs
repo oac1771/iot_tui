@@ -2,13 +2,29 @@ use futures_util::StreamExt;
 use iot_sdk::{PlatformPeripheral, central::Central};
 use tokio::sync::mpsc::{self, Receiver, Sender};
 
-pub async fn start() -> Result<(Peripherals, PeripheralsClient, Receiver<PeripheralRequest>), String>
-{
+pub async fn start() -> Result<PeripheralsInit, String> {
     let peripherals = Peripherals::new().await?;
     let (peripherals_req_tx, peripherals_req_rx) = mpsc::channel(100);
-    let client = PeripheralsClient::new(peripherals_req_tx);
+    let (peripherals_resp_tx, peripherals_resp_rx) = mpsc::channel(100);
+    let peripherals_client = PeripheralsClient::new(peripherals_req_tx);
 
-    Ok((peripherals, client, peripherals_req_rx))
+    let peripherals_init = PeripheralsInit {
+        peripherals,
+        peripherals_client,
+        peripherals_req_rx,
+        peripherals_resp_tx,
+        peripherals_resp_rx,
+    };
+
+    Ok(peripherals_init)
+}
+
+pub struct PeripheralsInit {
+    pub peripherals: Peripherals,
+    pub peripherals_client: PeripheralsClient,
+    pub peripherals_req_rx: Receiver<PeripheralRequest>,
+    pub peripherals_resp_tx: Sender<PeripheralResponse>,
+    pub peripherals_resp_rx: Receiver<PeripheralResponse>,
 }
 
 pub struct Peripherals(Central);
@@ -33,17 +49,27 @@ impl Peripherals {
     pub async fn handle_request(
         &self,
         peripheral_client_request: PeripheralRequest,
-    ) -> Result<PeripheralResponse, String> {
-        let result = match peripheral_client_request {
-            PeripheralRequest::GetPheripherals => self.get_peripherals().await,
+        peripherals_resp_tx: &Sender<PeripheralResponse>,
+    ) {
+        let central = self.0.clone();
+        let tx = peripherals_resp_tx.clone();
+
+        let request_function = match peripheral_client_request {
+            PeripheralRequest::GetPheripherals => Self::get_peripherals(central, tx),
         };
 
-        result
+        tokio::spawn(async move {
+            if let Err(err) = request_function.await {
+                panic!("Error handling request: {}", err)
+            }
+        });
     }
 
-    async fn get_peripherals(&self) -> Result<PeripheralResponse, String> {
-        let peripherals = self
-            .0
+    async fn get_peripherals(
+        central: Central,
+        tx: Sender<PeripheralResponse>,
+    ) -> Result<(), String> {
+        let peripherals = central
             .peripherals()
             .await
             .map_err(|e| e.to_string())?
@@ -52,8 +78,9 @@ impl Peripherals {
             .await;
 
         let response = PeripheralResponse::GetPheripherals(peripherals);
+        tx.send(response).await.map_err(|e| e.to_string())?;
 
-        Ok(response)
+        Ok(())
     }
 }
 

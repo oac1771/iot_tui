@@ -1,4 +1,7 @@
-use crate::{pages::home::HomePage, utils::peripherals};
+use crate::{
+    pages::home::HomePage,
+    utils::peripherals::{self, PeripheralsInit},
+};
 use crossterm::event::{
     Event as CrosstermEvent, EventStream, KeyCode, KeyEvent, KeyEventKind, KeyModifiers,
 };
@@ -34,7 +37,14 @@ impl App {
     pub async fn run(mut self, terminal: &mut DefaultTerminal) -> std::io::Result<()> {
         let mut reader = EventStream::new();
         let mut tick = time::interval(Duration::from_millis(TICK_IN_MILLISECONDS));
-        let (peripherals, peripherals_client, mut peripherals_req_tx) = peripherals::start()
+
+        let PeripheralsInit {
+            peripherals,
+            peripherals_client,
+            mut peripherals_req_rx,
+            peripherals_resp_tx,
+            mut peripherals_resp_rx,
+        } = peripherals::start()
             .await
             .map_err(|e| std::io::Error::other(e))?;
 
@@ -77,9 +87,14 @@ impl App {
 
                 }
 
-                Some(peripheral_client_request) = peripherals_req_tx.recv() => {
-                    let _response = peripherals.handle_request(peripheral_client_request).await;
+                Some(peripheral_client_request) = peripherals_req_rx.recv() => {
+                    peripherals.handle_request(peripheral_client_request, &peripherals_resp_tx).await;
                     println!("request handled");
+                    Ok(())
+                }
+
+                Some(peripheral_client_response) = peripherals_resp_rx.recv() => {
+                    println!("response handled: {:?}", peripheral_client_response);
                     Ok(())
                 }
 
