@@ -56,10 +56,12 @@ impl HomePage {
                     KeyCode::Char('s') => {
                         self.peripherals_client.get_peripherals().await?;
                     }
-                    // KeyCode::Enter if !self.state.get_local_names().is_empty() => {
-                    //     let peripheral = self.state.get_indexed_peripheral();
-                    //     self.get_characteristics(peripheral).await?
-                    // }
+                    KeyCode::Enter if !self.state.get_local_names().is_empty() => {
+                        let peripheral = self.state.get_indexed_peripheral();
+                        self.peripherals_client
+                            .get_characteristics(peripheral)
+                            .await?;
+                    }
                     KeyCode::Up => self.state.update_peripheral_index(-1),
                     KeyCode::Down => self.state.update_peripheral_index(1),
                     _ => {}
@@ -106,72 +108,30 @@ impl HomePage {
                 self.view = View::Peripheral(ViewState::Idle);
                 self.error = Some(err);
             }
+            PeripheralResponse::CharacteristicScanStarted => {
+                self.view =
+                    View::Characteristic(ViewState::Scanning((Spinner::default(), String::new())))
+            }
+            PeripheralResponse::GetCharacteristics(characteristics) => {
+                self.view = View::Characteristic(ViewState::Idle);
+                self.state.update_characteristics(characteristics);
+            }
+            PeripheralResponse::ScanningMessageUpdate(message) => {
+                let view_state = match &mut self.view {
+                    View::Characteristic(state) => state,
+                    View::Peripheral(state) => state,
+                };
+
+                if let ViewState::Scanning((_, scanning_message)) = view_state {
+                    *scanning_message = message
+                }
+            }
+            PeripheralResponse::CharacteristicScanError(err) => {
+                self.view = View::Peripheral(ViewState::Idle);
+                self.error = Some(err);
+            }
         }
     }
-
-    // pub async fn handle_page_event(&mut self, event: HomePageEvent) -> Result<(), String> {
-    //     match event {
-    //         HomePageEvent::PeripheralScanStarted => {
-    //             self.state.clear_peripherals();
-    //             self.view =
-    //                 View::Peripheral(ViewState::Scanning((Spinner::default(), String::new())))
-    //         }
-    //         HomePageEvent::PeripheralScanComplete(peripherals) => {
-    //             self.view = View::Peripheral(ViewState::Idle);
-    //             self.state.clear_characteristics(peripherals.len());
-    //             self.state.update_peripherals(peripherals).await;
-    //         }
-    //         HomePageEvent::PeripheralScanError(err) => {
-    //             self.view = View::Peripheral(ViewState::Idle);
-    //             self.error = Some(err);
-    //         }
-    //         HomePageEvent::CharacteristicScanStarted => {
-    //             self.view =
-    //                 View::Characteristic(ViewState::Scanning((Spinner::default(), String::new())))
-    //         }
-    //         HomePageEvent::CharacteristicScanComplete(characteristics) => {
-    //             self.view = View::Characteristic(ViewState::Idle);
-    //             self.state.update_characteristics(characteristics);
-    //         }
-    //         HomePageEvent::CharacteristicScanError(err) => {
-    //             self.view = View::Peripheral(ViewState::Idle);
-    //             self.error = Some(err);
-    //         }
-    //         HomePageEvent::CharacteristicCallStarted => {
-    //             self.view =
-    //                 View::Characteristic(ViewState::Scanning((Spinner::default(), String::new())))
-    //         }
-    //         HomePageEvent::ScanningMessageUpdate(message) => {
-    //             let view_state = match &mut self.view {
-    //                 View::Characteristic(state) => state,
-    //                 View::Peripheral(state) => state,
-    //             };
-
-    //             if let ViewState::Scanning((_, scanning_message)) = view_state {
-    //                 *scanning_message = message
-    //             }
-    //         }
-    //     }
-    //     Ok(())
-    // }
-
-    // async fn get_characteristics(&self, peripheral: &PlatformPeripheral) -> Result<(), String> {
-    //     let characteristics = self.state.get_characteristics();
-    //     if characteristics.is_empty() {
-    //         self.peripherals
-    //             .get_characteristics(&self.home_page_event_tx, peripheral)
-    //             .await?;
-    //     } else {
-    //         let _ = self
-    //             .home_page_event_tx
-    //             .send(HomePageEvent::CharacteristicScanComplete(
-    //                 characteristics.clone(),
-    //             ))
-    //             .await;
-    //     }
-
-    //     Ok(())
-    // }
 
     // async fn call_characteristic(&self, characteristic: &Characteristic) -> Result<(), String> {
     //     Peripherals::call_characteristic(&self.home_page_event_tx, characteristic).await?;

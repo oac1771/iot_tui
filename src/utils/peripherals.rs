@@ -1,6 +1,12 @@
+use futures::FutureExt;
 use futures_util::StreamExt;
-use iot_sdk::{PlatformPeripheral, central::Central};
-use tokio::sync::mpsc::{self, Receiver, Sender};
+use iot_sdk::{Characteristic, Peripheral, PlatformPeripheral, central::Central};
+use std::pin::Pin;
+use tokio::{
+    select,
+    sync::mpsc::{self, Receiver, Sender},
+    time::{Duration, sleep},
+};
 
 pub async fn start() -> Result<PeripheralsInit, String> {
     let peripherals = Peripherals::new().await?;
@@ -33,6 +39,7 @@ pub struct PeripheralsClient(Sender<PeripheralRequest>);
 
 pub enum PeripheralRequest {
     GetPheripherals,
+    GetCharacteristics(PlatformPeripheral),
 }
 
 #[derive(Debug)]
@@ -40,6 +47,10 @@ pub enum PeripheralResponse {
     PeripheralScanStarted,
     GetPheripherals(Vec<PlatformPeripheral>),
     PeripheralScanError(String),
+    CharacteristicScanStarted,
+    ScanningMessageUpdate(String),
+    GetCharacteristics(Vec<Characteristic>),
+    CharacteristicScanError(String),
 }
 
 impl Peripherals {
@@ -56,9 +67,13 @@ impl Peripherals {
         let central = self.0.clone();
         let tx = peripherals_resp_tx.clone();
 
-        let request_function = match peripheral_client_request {
-            PeripheralRequest::GetPheripherals => Self::get_peripherals(central, tx),
-        };
+        let request_function: Pin<Box<dyn Future<Output = Result<(), String>> + Send>> =
+            match peripheral_client_request {
+                PeripheralRequest::GetPheripherals => Self::get_peripherals(central, tx).boxed(),
+                PeripheralRequest::GetCharacteristics(peripheral) => {
+                    Self::get_characteristics(tx, peripheral).boxed()
+                }
+            };
 
         tokio::spawn(async move {
             if let Err(err) = request_function.await {
@@ -98,6 +113,57 @@ impl Peripherals {
 
         Ok(())
     }
+
+    async fn get_characteristics(
+        tx: Sender<PeripheralResponse>,
+        peripheral: PlatformPeripheral,
+    ) -> Result<(), String> {
+        let result = async {
+            tx.send(PeripheralResponse::CharacteristicScanStarted)
+                .await
+                .map_err(|e| e.to_string())?;
+
+            Self::connect_to_peripheral(&peripheral, &tx).await?;
+
+            let characteristics = peripheral
+                .characteristics()
+                .iter()
+                .cloned()
+                .collect::<Vec<Characteristic>>();
+
+            let response = PeripheralResponse::GetCharacteristics(characteristics);
+            tx.send(response).await.map_err(|e| e.to_string())?;
+
+            Ok(())
+        }
+        .await;
+
+        if let Err(err) = result {
+            tx.send(PeripheralResponse::CharacteristicScanError(err))
+                .await
+                .map_err(|e| e.to_string())?;
+        }
+
+        Ok(())
+    }
+
+    async fn connect_to_peripheral(
+        peripheral: &PlatformPeripheral,
+        tx: &Sender<PeripheralResponse>,
+    ) -> Result<(), String> {
+        let _ = tx
+            .send(PeripheralResponse::ScanningMessageUpdate(
+                "Connecting to Peripheral".to_string(),
+            ))
+            .await;
+
+        select! {
+            result = peripheral.connect() => result.map_err(|e| e.to_string()),
+            _ = sleep(Duration::from_secs(5)) => Err("Timed out connecting to Peripheral".to_string())
+        }?;
+
+        Ok(())
+    }
 }
 
 impl PeripheralsClient {
@@ -107,6 +173,13 @@ impl PeripheralsClient {
 
     pub async fn get_peripherals(&self) -> Result<(), String> {
         let request = PeripheralRequest::GetPheripherals;
+        self.send_request(request).await?;
+
+        Ok(())
+    }
+
+    pub async fn get_characteristics(&self, peripheral: &PlatformPeripheral) -> Result<(), String> {
+        let request = PeripheralRequest::GetCharacteristics(peripheral.clone());
         self.send_request(request).await?;
 
         Ok(())
