@@ -44,9 +44,7 @@ impl App {
             mut peripherals_req_rx,
             peripherals_resp_tx,
             mut peripherals_resp_rx,
-        } = peripherals::start()
-            .await
-            .map_err(|e| std::io::Error::other(e))?;
+        } = peripherals::start().await.map_err(std::io::Error::other)?;
 
         let mut home_page = HomePage::new(peripherals_client);
 
@@ -89,19 +87,22 @@ impl App {
 
                 Some(peripheral_client_request) = peripherals_req_rx.recv() => {
                     peripherals.handle_request(peripheral_client_request, &peripherals_resp_tx).await;
-                    println!("request handled");
                     Ok(())
                 }
 
                 Some(peripheral_client_response) = peripherals_resp_rx.recv() => {
-                    println!("response handled: {:?}", peripheral_client_response);
+                    match &mut self.active_page {
+                        PageKind::Home => {
+                            home_page.handle_peripheral_client_response(peripheral_client_response).await
+                        }
+                    };
                     Ok(())
                 }
 
             };
 
             if let Err(err) = result {
-                panic!("Error {err}");
+                panic!("Error in event loop {err}");
             }
         }
 

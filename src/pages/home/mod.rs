@@ -2,4 +2,4 @@ mod state;
 mod widget;
 
 pub use state::State;
-pub use widget::{HomePage, HomePageEvent};
+pub use widget::HomePage;

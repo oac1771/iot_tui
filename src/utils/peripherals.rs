@@ -37,7 +37,9 @@ pub enum PeripheralRequest {
 
 #[derive(Debug)]
 pub enum PeripheralResponse {
+    PeripheralScanStarted,
     GetPheripherals(Vec<PlatformPeripheral>),
+    PeripheralScanError(String),
 }
 
 impl Peripherals {
@@ -60,7 +62,7 @@ impl Peripherals {
 
         tokio::spawn(async move {
             if let Err(err) = request_function.await {
-                panic!("Error handling request: {}", err)
+                panic!("Error handling request: {err}")
             }
         });
     }
@@ -69,16 +71,30 @@ impl Peripherals {
         central: Central,
         tx: Sender<PeripheralResponse>,
     ) -> Result<(), String> {
-        let peripherals = central
-            .peripherals()
-            .await
-            .map_err(|e| e.to_string())?
-            .take(15)
-            .collect::<Vec<PlatformPeripheral>>()
-            .await;
+        let result = async {
+            tx.send(PeripheralResponse::PeripheralScanStarted)
+                .await
+                .map_err(|e| e.to_string())?;
+            let peripherals = central
+                .peripherals()
+                .await
+                .map_err(|e| e.to_string())?
+                .take(15)
+                .collect::<Vec<PlatformPeripheral>>()
+                .await;
 
-        let response = PeripheralResponse::GetPheripherals(peripherals);
-        tx.send(response).await.map_err(|e| e.to_string())?;
+            let response = PeripheralResponse::GetPheripherals(peripherals);
+            tx.send(response).await.map_err(|e| e.to_string())?;
+
+            Ok(())
+        }
+        .await;
+
+        if let Err(err) = result {
+            tx.send(PeripheralResponse::PeripheralScanError(err))
+                .await
+                .map_err(|e| e.to_string())?;
+        }
 
         Ok(())
     }
