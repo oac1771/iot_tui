@@ -8,7 +8,7 @@ use tokio::{
     time::{Duration, sleep},
 };
 
-pub async fn start() -> Result<PeripheralsInit, String> {
+pub async fn init() -> Result<(PeripheralsInit, PeripheralsClient), String> {
     let peripherals = Peripherals::new().await?;
     let (peripherals_req_tx, peripherals_req_rx) = mpsc::channel(100);
     let (peripherals_resp_tx, peripherals_resp_rx) = mpsc::channel(100);
@@ -16,18 +16,16 @@ pub async fn start() -> Result<PeripheralsInit, String> {
 
     let peripherals_init = PeripheralsInit {
         peripherals,
-        peripherals_client,
         peripherals_req_rx,
         peripherals_resp_tx,
         peripherals_resp_rx,
     };
 
-    Ok(peripherals_init)
+    Ok((peripherals_init, peripherals_client))
 }
 
 pub struct PeripheralsInit {
     pub peripherals: Peripherals,
-    pub peripherals_client: PeripheralsClient,
     pub peripherals_req_rx: Receiver<PeripheralRequest>,
     pub peripherals_resp_tx: Sender<PeripheralResponse>,
     pub peripherals_resp_rx: Receiver<PeripheralResponse>,

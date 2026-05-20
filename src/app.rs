@@ -1,6 +1,6 @@
 use crate::{
-    pages::home::HomePage,
-    utils::peripherals::{self, PeripheralsInit},
+    pages::{Page, home::HomePage},
+    utils::peripherals::{self, PeripheralResponse, PeripheralsInit},
 };
 use crossterm::event::{
     Event as CrosstermEvent, EventStream, KeyCode, KeyEvent, KeyEventKind, KeyModifiers,
@@ -15,8 +15,10 @@ use tokio::{
 const TICK_IN_MILLISECONDS: u64 = 50;
 
 pub struct App {
+    home_page: HomePage,
     active_page: PageKind,
     exit: bool,
+    peripherals_init: PeripheralsInit,
 }
 
 #[derive(Copy, Clone)]
@@ -26,76 +28,41 @@ enum PageKind {
 
 impl App {
     pub async fn new() -> Result<Self, String> {
+        let (peripherals_init, peripherals_client) =
+            peripherals::init().await.map_err(|e| e.to_string())?;
+
         let app = Self {
+            home_page: HomePage::new(peripherals_client),
             active_page: PageKind::Home,
             exit: false,
+            peripherals_init,
         };
 
         Ok(app)
     }
 
-    pub async fn run(mut self, terminal: &mut DefaultTerminal) -> std::io::Result<()> {
+    pub async fn run(mut self, terminal: &mut DefaultTerminal) -> Result<(), String> {
         let mut reader = EventStream::new();
         let mut tick = time::interval(Duration::from_millis(TICK_IN_MILLISECONDS));
 
-        let PeripheralsInit {
-            peripherals,
-            peripherals_client,
-            mut peripherals_req_rx,
-            peripherals_resp_tx,
-            mut peripherals_resp_rx,
-        } = peripherals::start().await.map_err(std::io::Error::other)?;
-
-        let mut home_page = HomePage::new(peripherals_client);
-
         while !self.exit {
-            terminal.draw(|frame| {
-                let area = frame.area();
-
-                match &self.active_page {
-                    PageKind::Home => {
-                        frame.render_widget(&home_page, area);
-                    }
-                }
-            })?;
+            self.render(terminal).await?;
 
             let result = select! {
-                _ = tick.tick() => {
-                    match &mut self.active_page {
-                        PageKind::Home => {
-                            home_page.tick().await;
-                            Ok(())
-                        }
-                    }
-                }
+                    _ = tick.tick() => {self.tick().await}
 
                 key_event = reader.next() => {
                     if let Some(Ok(CrosstermEvent::Key(key_event))) = key_event {
-
-                        self.handle_key_event(&key_event);
-
-                        match &mut self.active_page {
-                            PageKind::Home => {
-                                home_page.handle_key_event(&key_event).await
-                            }
-                        }
+                        self.__handle_key_event(&key_event);
+                        self.handle_key_event(&key_event).await
                     } else {
                         Ok(())
                     }
-
                 }
 
-                Some(peripheral_client_request) = peripherals_req_rx.recv() => {
-                    peripherals.handle_request(peripheral_client_request, &peripherals_resp_tx).await;
-                    Ok(())
-                }
-
-                Some(peripheral_client_response) = peripherals_resp_rx.recv() => {
-                    match &mut self.active_page {
-                        PageKind::Home => {
-                            home_page.handle_peripheral_client_response(peripheral_client_response).await
-                        }
-                    };
+                Some(peripheral_client_response) = self.peripherals_init.peripherals_resp_rx.recv() => {self.handle_peripheral_client_response(peripheral_client_response).await}
+                Some(peripheral_client_request) = self.peripherals_init.peripherals_req_rx.recv() => {
+                    self.peripherals_init.peripherals.handle_request(peripheral_client_request, &self.peripherals_init.peripherals_resp_tx).await;
                     Ok(())
                 }
 
@@ -109,7 +76,51 @@ impl App {
         Ok(())
     }
 
-    fn handle_key_event(&mut self, key_event: &KeyEvent) {
+    async fn tick(&mut self) -> Result<(), String> {
+        match &mut self.active_page {
+            PageKind::Home => <HomePage as Page>::tick(&mut self.home_page).await,
+        }
+    }
+
+    async fn render(&mut self, terminal: &mut DefaultTerminal) -> Result<(), String> {
+        match &mut self.active_page {
+            PageKind::Home => {
+                terminal
+                    .draw(|frame| {
+                        let area = frame.area();
+                        frame.render_widget(self.home_page.generate_widget(), area);
+                    })
+                    .map_err(|err| err.to_string())?;
+            }
+        };
+
+        Ok(())
+    }
+
+    async fn handle_key_event(&mut self, key_event: &KeyEvent) -> Result<(), String> {
+        match &mut self.active_page {
+            PageKind::Home => {
+                <HomePage as Page>::handle_key_event(&mut self.home_page, key_event).await
+            }
+        }
+    }
+
+    async fn handle_peripheral_client_response(
+        &mut self,
+        peripheral_client_response: PeripheralResponse,
+    ) -> Result<(), String> {
+        match &mut self.active_page {
+            PageKind::Home => {
+                <HomePage as Page>::handle_peripheral_client_response(
+                    &mut self.home_page,
+                    peripheral_client_response,
+                )
+                .await
+            }
+        }
+    }
+
+    fn __handle_key_event(&mut self, key_event: &KeyEvent) {
         if key_event.kind == KeyEventKind::Press
             && key_event.modifiers == KeyModifiers::CONTROL
             && key_event.code == KeyCode::Char('c')
