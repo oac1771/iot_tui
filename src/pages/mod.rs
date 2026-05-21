@@ -10,7 +10,7 @@ use crate::utils::peripherals::PeripheralResponse;
 
 pub trait Page {
     fn generate_widget(&self) -> impl Widget {
-        Block::bordered().title(Line::from("  Page  "))
+        Block::bordered().title_top(Line::from("  Widget  ").centered())
     }
 
     fn tick(&mut self) -> impl Future<Output = Result<(), String>> {
