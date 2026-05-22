@@ -7,220 +7,227 @@ use ratatui::{
     widgets::{Block, Clear, List, ListItem, ListState, Paragraph, StatefulWidget, Widget, Wrap},
 };
 
-// pub struct HomeWidget;
-
-// impl HomeWidget {
-// fn render_title_area(&self, area: Rect, buf: &mut Buffer) {
-//     let layout = Layout::default()
-//         .direction(Direction::Horizontal)
-//         .constraints(vec![Constraint::Percentage(35), Constraint::Percentage(65)]);
-
-//     let [cmd_area, meta_data_area] = layout.areas(area);
-
-//     let instructions = Line::from(vec![" Quit ".into(), "<Ctrl + c> ".blue().bold()]);
-
-//     let cmd_block = Block::bordered()
-//         .title(Line::from("  Commands  ").bold().centered())
-//         .title_bottom(instructions.centered())
-//         .border_set(border::DOUBLE);
-
-//     let cmds = Line::from(vec![" Scan ".into(), "<s>".blue().bold()]);
-
-//     Paragraph::new(cmds)
-//         .block(cmd_block)
-//         .white()
-//         .left_aligned()
-//         .wrap(Wrap { trim: true })
-//         .render(cmd_area, buf);
-
-//     let meta_data_block = Block::bordered().border_set(border::DOUBLE);
-
-//     let view_specific_cmds = match self.view {
-//         View::Peripheral(_) => Line::from(vec![
-//             " View Characteristics ".into(),
-//             " <Enter> ".blue().bold(),
-//             " Up ".into(),
-//             " <Up> ".blue().bold(),
-//             " Down ".into(),
-//             " <Down> ".blue().bold(),
-//         ]),
-//         View::Characteristic(_) => Line::from(vec![
-//             " Go pack to peripheral view ".into(),
-//             "<Esc>".blue().bold(),
-//         ]),
-//     };
-
-//     Paragraph::new(view_specific_cmds)
-//         .block(meta_data_block)
-//         .white()
-//         .centered()
-//         .wrap(Wrap { trim: true })
-//         .render(meta_data_area, buf);
-// }
-
-// fn render_peripheral_names(&self, area: Rect, buf: &mut Buffer, block: &Block) {
-//     let local_names = self.state.get_local_names();
-//     let index = self.state.get_peripheral_index();
-
-//     let scan_list: Vec<ListItem> = local_names
-//         .iter()
-//         .map(|p| ListItem::new(Line::from(p.as_str()).alignment(Alignment::Center)))
-//         .collect();
-
-//     let mut scan_list_state = ListState::default();
-//     scan_list_state.select(Some(index));
-
-//     StatefulWidget::render(
-//         List::new(scan_list)
-//             .block(block.clone())
-//             .highlight_style(Style::new().bold().green()),
-//         area,
-//         buf,
-//         &mut scan_list_state,
-//     );
-// }
-
-// fn render_characteristics(&self, area: Rect, buf: &mut Buffer, block: &Block) {
-//     let characteristics_entry = self
-//         .state
-//         .get_characteristics()
-//         .iter()
-//         .map(|c| ListItem::new(Line::from(c.to_string()).alignment(Alignment::Center)))
-//         .collect::<Vec<ListItem>>();
-
-//     let index = self.state.get_characteristic_index();
-//     let mut characteristic_list_state = ListState::default();
-//     characteristic_list_state.select(Some(index));
-
-//     StatefulWidget::render(
-//         List::new(characteristics_entry)
-//             .block(block.clone())
-//             .highlight_style(Style::new().bold().green()),
-//         area,
-//         buf,
-//         &mut characteristic_list_state,
-//     );
-// }
-
-// fn render_peripheral_scan_spinner(
-//     &self,
-//     area: Rect,
-//     buf: &mut Buffer,
-//     spinner: &Spinner,
-//     block: &Block,
-//     scanning_message: &str,
-// ) {
-//     let inner = block.inner(area);
-
-//     let layout = Layout::default()
-//         .direction(Direction::Vertical)
-//         .constraints([
-//             Constraint::Percentage(50),
-//             Constraint::Length(3),
-//             Constraint::Percentage(50),
-//         ])
-//         .split(inner);
-
-//     let center_area = layout[1];
-
-//     let message = if !scanning_message.is_empty() {
-//         scanning_message
-//     } else {
-//         "Scanning For Peripherals..."
-//     };
-
-//     let paragraph =
-//         Paragraph::new(vec![Line::raw(message), Line::from(spinner.frame()).bold()])
-//             .alignment(Alignment::Center);
-
-//     paragraph.render(center_area, buf);
-// }
-
-// fn render_characteristic_scan_spinner(
-//     &self,
-//     area: Rect,
-//     buf: &mut Buffer,
-//     spinner: &Spinner,
-//     block: &Block,
-//     scanning_message: &str,
-// ) {
-//     let inner = block.inner(area);
-
-//     let layout = Layout::default()
-//         .direction(Direction::Vertical)
-//         .constraints([
-//             Constraint::Percentage(50),
-//             Constraint::Length(3),
-//             Constraint::Percentage(50),
-//         ])
-//         .split(inner);
-
-//     let center_area = layout[1];
-
-//     let message = if !scanning_message.is_empty() {
-//         scanning_message
-//     } else {
-//         "Scanning For Characteristics..."
-//     };
-
-//     let paragraph =
-//         Paragraph::new(vec![Line::raw(message), Line::from(spinner.frame()).bold()])
-//             .alignment(Alignment::Center);
-
-//     paragraph.render(center_area, buf);
-// }
-
-// fn render_data_area(&self, area: Rect, buf: &mut Buffer) {
-//     let data_block = Block::bordered()
-//         .title(Line::from(" ***** ").bold().centered())
-//         .border_set(border::DOUBLE);
-
-//     match &self.view {
-//         View::Peripheral(ViewState::Idle) => {
-//             self.render_peripheral_names(area, buf, &data_block)
-//         }
-//         View::Peripheral(ViewState::Scanning((spinner, scanning_msg))) => {
-//             self.render_peripheral_scan_spinner(area, buf, spinner, &data_block, scanning_msg)
-//         }
-//         View::Characteristic(ViewState::Idle) => {
-//             self.render_characteristics(area, buf, &data_block)
-//         }
-//         View::Characteristic(ViewState::Scanning((spinner, scanning_msg))) => self
-//             .render_characteristic_scan_spinner(area, buf, spinner, &data_block, scanning_msg),
-//     }
-
-//     data_block.render(area, buf);
-// }
-
-// }
-
-// impl Widget for HomeWidget {
-//     fn render(self, area: Rect, buf: &mut Buffer) {
-//         let layout = Layout::default()
-//             .direction(Direction::Vertical)
-//             .constraints(vec![Constraint::Percentage(25), Constraint::Percentage(75)]);
-//         let [title_area, data_area] = layout.areas(area);
-
-//         if let Some(err) = &self.error {
-//             self.render_error_popup(area, buf, err);
-//         } else {
-//             self.render_title_area(title_area, buf);
-//             self.render_data_area(data_area, buf);
-//         }
-//     }
-// }
+use crate::{
+    pages::home::{View, ViewState, state::State},
+    utils::spinner::Spinner,
+};
 
 pub enum HomeWidget<'a> {
     PopUpError(PopUpErrorWidget<'a>),
-    Foo,
+    Display(DisplayWidget<'a>),
 }
 
 impl<'a> Widget for HomeWidget<'a> {
     fn render(self, area: Rect, buf: &mut Buffer) {
         match self {
             HomeWidget::PopUpError(pop_up_error_widget) => pop_up_error_widget.render(area, buf),
-            HomeWidget::Foo => (),
+            HomeWidget::Display(display_widget) => display_widget.render(area, buf),
         }
+    }
+}
+
+pub struct DisplayWidget<'a> {
+    state: &'a State,
+    view: &'a View,
+}
+
+impl<'a> DisplayWidget<'a> {
+    pub fn new(state: &'a State, view: &'a View) -> Self {
+        Self { state, view }
+    }
+
+    fn render_title_area(&self, area: Rect, buf: &mut Buffer) {
+        let layout = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints(vec![Constraint::Percentage(35), Constraint::Percentage(65)]);
+
+        let [cmd_area, meta_data_area] = layout.areas(area);
+
+        let instructions = Line::from(vec![" Quit ".into(), "<Ctrl + c> ".blue().bold()]);
+
+        let cmd_block = Block::bordered()
+            .title(Line::from("  Commands  ").bold().centered())
+            .title_bottom(instructions.centered())
+            .border_set(border::DOUBLE);
+
+        let cmds = Line::from(vec![" Scan ".into(), "<s>".blue().bold()]);
+
+        Paragraph::new(cmds)
+            .block(cmd_block)
+            .white()
+            .left_aligned()
+            .wrap(Wrap { trim: true })
+            .render(cmd_area, buf);
+
+        let meta_data_block = Block::bordered().border_set(border::DOUBLE);
+
+        let view_specific_cmds = match self.view {
+            View::Peripheral(_) => Line::from(vec![
+                " View Characteristics ".into(),
+                " <Enter> ".blue().bold(),
+                " Up ".into(),
+                " <Up> ".blue().bold(),
+                " Down ".into(),
+                " <Down> ".blue().bold(),
+            ]),
+            View::Characteristic(_) => Line::from(vec![
+                " Go pack to peripheral view ".into(),
+                "<Esc>".blue().bold(),
+            ]),
+        };
+
+        Paragraph::new(view_specific_cmds)
+            .block(meta_data_block)
+            .white()
+            .centered()
+            .wrap(Wrap { trim: true })
+            .render(meta_data_area, buf);
+    }
+
+    fn render_peripheral_names(&self, area: Rect, buf: &mut Buffer, block: &Block) {
+        let local_names = self.state.get_local_names();
+        let index = self.state.get_peripheral_index();
+
+        let scan_list: Vec<ListItem> = local_names
+            .iter()
+            .map(|p| ListItem::new(Line::from(p.as_str()).alignment(Alignment::Center)))
+            .collect();
+
+        let mut scan_list_state = ListState::default();
+        scan_list_state.select(Some(index));
+
+        StatefulWidget::render(
+            List::new(scan_list)
+                .block(block.clone())
+                .highlight_style(Style::new().bold().green()),
+            area,
+            buf,
+            &mut scan_list_state,
+        );
+    }
+
+    fn render_characteristics(&self, area: Rect, buf: &mut Buffer, block: &Block) {
+        let characteristics_entry = self
+            .state
+            .get_characteristics()
+            .iter()
+            .map(|c| ListItem::new(Line::from(c.to_string()).alignment(Alignment::Center)))
+            .collect::<Vec<ListItem>>();
+
+        let index = self.state.get_characteristic_index();
+        let mut characteristic_list_state = ListState::default();
+        characteristic_list_state.select(Some(index));
+
+        StatefulWidget::render(
+            List::new(characteristics_entry)
+                .block(block.clone())
+                .highlight_style(Style::new().bold().green()),
+            area,
+            buf,
+            &mut characteristic_list_state,
+        );
+    }
+
+    fn render_peripheral_scan_spinner(
+        &self,
+        area: Rect,
+        buf: &mut Buffer,
+        spinner: &Spinner,
+        block: &Block,
+        scanning_message: &str,
+    ) {
+        let inner = block.inner(area);
+
+        let layout = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Percentage(50),
+                Constraint::Length(3),
+                Constraint::Percentage(50),
+            ])
+            .split(inner);
+
+        let center_area = layout[1];
+
+        let message = if !scanning_message.is_empty() {
+            scanning_message
+        } else {
+            "Scanning For Peripherals..."
+        };
+
+        let paragraph =
+            Paragraph::new(vec![Line::raw(message), Line::from(spinner.frame()).bold()])
+                .alignment(Alignment::Center);
+
+        paragraph.render(center_area, buf);
+    }
+
+    fn render_characteristic_scan_spinner(
+        &self,
+        area: Rect,
+        buf: &mut Buffer,
+        spinner: &Spinner,
+        block: &Block,
+        scanning_message: &str,
+    ) {
+        let inner = block.inner(area);
+
+        let layout = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Percentage(50),
+                Constraint::Length(3),
+                Constraint::Percentage(50),
+            ])
+            .split(inner);
+
+        let center_area = layout[1];
+
+        let message = if !scanning_message.is_empty() {
+            scanning_message
+        } else {
+            "Scanning For Characteristics..."
+        };
+
+        let paragraph =
+            Paragraph::new(vec![Line::raw(message), Line::from(spinner.frame()).bold()])
+                .alignment(Alignment::Center);
+
+        paragraph.render(center_area, buf);
+    }
+
+    fn render_data_area(&self, area: Rect, buf: &mut Buffer) {
+        let data_block = Block::bordered()
+            .title(Line::from(" ***** ").bold().centered())
+            .border_set(border::DOUBLE);
+
+        match &self.view {
+            View::Peripheral(ViewState::Idle) => {
+                self.render_peripheral_names(area, buf, &data_block)
+            }
+            View::Peripheral(ViewState::Scanning((spinner, scanning_msg))) => {
+                self.render_peripheral_scan_spinner(area, buf, spinner, &data_block, scanning_msg)
+            }
+            View::Characteristic(ViewState::Idle) => {
+                self.render_characteristics(area, buf, &data_block)
+            }
+            View::Characteristic(ViewState::Scanning((spinner, scanning_msg))) => self
+                .render_characteristic_scan_spinner(area, buf, spinner, &data_block, scanning_msg),
+        }
+
+        data_block.render(area, buf);
+    }
+}
+
+impl<'a> Widget for DisplayWidget<'a> {
+    fn render(self, area: Rect, buf: &mut Buffer) {
+        let layout = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints(vec![Constraint::Percentage(25), Constraint::Percentage(75)]);
+        let [title_area, data_area] = layout.areas(area);
+
+        self.render_title_area(title_area, buf);
+        self.render_data_area(data_area, buf);
     }
 }
 

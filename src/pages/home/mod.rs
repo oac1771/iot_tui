@@ -2,7 +2,7 @@ mod state;
 mod widget;
 
 use crate::{
-    pages::home::widget::{HomeWidget, PopUpErrorWidget},
+    pages::home::widget::{DisplayWidget, HomeWidget, PopUpErrorWidget},
     utils::{
         peripherals::{PeripheralResponse, PeripheralsClient},
         spinner::Spinner,
@@ -142,7 +142,7 @@ impl Page for HomePage {
         if let Some(error) = &self.error {
             HomeWidget::PopUpError(PopUpErrorWidget::new(error.as_ref()))
         } else {
-            HomeWidget::Foo
+            HomeWidget::Display(DisplayWidget::new(&self.state, &self.view))
         }
     }
 }
