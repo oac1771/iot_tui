@@ -3,7 +3,7 @@ use ratatui::{
     layout::{Alignment, Constraint, Direction, Flex, Layout, Rect},
     style::{Style, Stylize},
     symbols::border,
-    text::Line,
+    text::{Line, Text},
     widgets::{Block, Clear, List, ListItem, ListState, Paragraph, StatefulWidget, Widget, Wrap},
 };
 
@@ -34,54 +34,6 @@ pub struct DisplayWidget<'a> {
 impl<'a> DisplayWidget<'a> {
     pub fn new(state: &'a State, view: &'a View) -> Self {
         Self { state, view }
-    }
-
-    fn render_title_area(&self, area: Rect, buf: &mut Buffer) {
-        let layout = Layout::default()
-            .direction(Direction::Horizontal)
-            .constraints(vec![Constraint::Percentage(35), Constraint::Percentage(65)]);
-
-        let [cmd_area, meta_data_area] = layout.areas(area);
-
-        let instructions = Line::from(vec![" Quit ".into(), "<Ctrl + c> ".blue().bold()]);
-
-        let cmd_block = Block::bordered()
-            .title(Line::from("  Commands  ").bold().centered())
-            .title_bottom(instructions.centered())
-            .border_set(border::DOUBLE);
-
-        let cmds = Line::from(vec![" Scan ".into(), "<s>".blue().bold()]);
-
-        Paragraph::new(cmds)
-            .block(cmd_block)
-            .white()
-            .left_aligned()
-            .wrap(Wrap { trim: true })
-            .render(cmd_area, buf);
-
-        let meta_data_block = Block::bordered().border_set(border::DOUBLE);
-
-        let view_specific_cmds = match self.view {
-            View::Peripheral(_) => Line::from(vec![
-                " View Characteristics ".into(),
-                " <Enter> ".blue().bold(),
-                " Up ".into(),
-                " <Up> ".blue().bold(),
-                " Down ".into(),
-                " <Down> ".blue().bold(),
-            ]),
-            View::Characteristic(_) => Line::from(vec![
-                " Go pack to peripheral view ".into(),
-                "<Esc>".blue().bold(),
-            ]),
-        };
-
-        Paragraph::new(view_specific_cmds)
-            .block(meta_data_block)
-            .white()
-            .centered()
-            .wrap(Wrap { trim: true })
-            .render(meta_data_area, buf);
     }
 
     fn render_peripheral_names(&self, area: Rect, buf: &mut Buffer, block: &Block) {
@@ -217,17 +169,73 @@ impl<'a> DisplayWidget<'a> {
 
         data_block.render(area, buf);
     }
+
+    fn render_command_area(&self, area: Rect, buf: &mut Buffer) {
+        let layout = Layout::default()
+            .direction(Direction::Horizontal)
+            .flex(Flex::Center)
+            .constraints(vec![
+                Constraint::Percentage(25),
+                Constraint::Percentage(25),
+                Constraint::Percentage(25),
+                Constraint::Percentage(25),
+            ]);
+
+        let [_, global_cmd_area, view_specific_area, _] = layout.areas(area);
+
+        let global_cmds = Text::from(vec![
+            Line::from(vec![" Navigate: ".into(), " Up/Down ".blue().bold()]).centered(),
+            Line::from(vec![" Quit: ".into(), " Ctrl + c ".blue().bold()]).centered(),
+        ]);
+
+        Paragraph::new(global_cmds)
+            .render(global_cmd_area, buf);
+
+        let view_specific_cmds = match self.view {
+            View::Peripheral(_) => Line::from(vec![
+                " Scan: ".into(),
+                " <s> ".blue().bold(),
+            ]),
+            View::Characteristic(_) => Line::from(vec![
+                " Go pack to peripheral view ".into(),
+                "<Esc>".blue().bold(),
+            ]),
+        };
+
+        Paragraph::new(view_specific_cmds.centered())
+            .white()
+            .centered()
+            .wrap(Wrap { trim: true })
+            .render(view_specific_area, buf);
+    }
 }
 
 impl<'a> Widget for DisplayWidget<'a> {
     fn render(self, area: Rect, buf: &mut Buffer) {
+        let outline_block = Block::bordered()
+            .border_set(border::DOUBLE)
+            .border_style(Style::new().yellow())
+            .title_top(
+                Line::from("  IOT v0.0.0  ")
+                    .style(Style::new().yellow())
+                    .centered(),
+            );
+
+        let outline_block_inner_area = outline_block.inner(area);
         let layout = Layout::default()
             .direction(Direction::Vertical)
-            .constraints(vec![Constraint::Percentage(25), Constraint::Percentage(75)]);
-        let [title_area, data_area] = layout.areas(area);
+            .constraints(vec![
+                Constraint::Percentage(10),
+                Constraint::Percentage(80),
+                Constraint::Percentage(10),
+            ]);
+        let [top_area, mid_area, lower_area] = layout.areas(outline_block_inner_area);
 
-        self.render_title_area(title_area, buf);
-        self.render_data_area(data_area, buf);
+        self.render_command_area(lower_area, buf);
+        outline_block.render(area, buf);
+
+        // self.render_title_area(title_area, buf);
+        // self.render_data_area(data_area, buf);
     }
 }
 
