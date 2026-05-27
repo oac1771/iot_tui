@@ -63,7 +63,7 @@ impl<'a> DisplayWidget<'a> {
             .state
             .get_characteristics()
             .iter()
-            .map(|c| ListItem::new(Line::from(c.to_string()).alignment(Alignment::Center)))
+            .map(|c| ListItem::new(Line::from(format!("UUID: {}", c.uuid)).centered()))
             .collect::<Vec<ListItem>>();
 
         let index = self.state.get_characteristic_index();
@@ -149,25 +149,46 @@ impl<'a> DisplayWidget<'a> {
     }
 
     fn render_data_area(&self, area: Rect, buf: &mut Buffer) {
-        let data_block = Block::bordered()
-            .title(Line::from(" ***** ").bold().centered())
-            .border_set(border::DOUBLE);
+        let layout = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints(vec![Constraint::Percentage(40), Constraint::Percentage(60)]);
+        let [left_area, right_area] = layout.areas(area);
+
+        let peripheral_block = Block::bordered()
+            .border_set(border::DOUBLE)
+            .title_top(Line::from(" Peripherals ").centered());
+
+        let characteristic_block = Block::bordered()
+            .border_set(border::DOUBLE)
+            .title_top(Line::from(" Characteristics ").centered());
 
         match &self.view {
             View::Peripheral(ViewState::Idle) => {
-                self.render_peripheral_names(area, buf, &data_block)
+                self.render_peripheral_names(left_area, buf, &peripheral_block)
             }
-            View::Peripheral(ViewState::Scanning((spinner, scanning_msg))) => {
-                self.render_peripheral_scan_spinner(area, buf, spinner, &data_block, scanning_msg)
-            }
+            View::Peripheral(ViewState::Scanning((spinner, scanning_message))) => self
+                .render_peripheral_scan_spinner(
+                    left_area,
+                    buf,
+                    spinner,
+                    &peripheral_block,
+                    scanning_message,
+                ),
             View::Characteristic(ViewState::Idle) => {
-                self.render_characteristics(area, buf, &data_block)
+                self.render_characteristics(right_area, buf, &characteristic_block)
             }
-            View::Characteristic(ViewState::Scanning((spinner, scanning_msg))) => self
-                .render_characteristic_scan_spinner(area, buf, spinner, &data_block, scanning_msg),
+            View::Characteristic(ViewState::Scanning((spinner, scanning_message))) => self
+                .render_characteristic_scan_spinner(
+                    right_area,
+                    buf,
+                    spinner,
+                    &characteristic_block,
+                    scanning_message,
+                ),
         }
 
-        data_block.render(area, buf);
+        peripheral_block.render(left_area, buf);
+        characteristic_block.render(right_area, buf)
     }
 
     fn render_command_area(&self, area: Rect, buf: &mut Buffer) {
@@ -188,14 +209,10 @@ impl<'a> DisplayWidget<'a> {
             Line::from(vec![" Quit: ".into(), " Ctrl + c ".blue().bold()]).centered(),
         ]);
 
-        Paragraph::new(global_cmds)
-            .render(global_cmd_area, buf);
+        Paragraph::new(global_cmds).render(global_cmd_area, buf);
 
         let view_specific_cmds = match self.view {
-            View::Peripheral(_) => Line::from(vec![
-                " Scan: ".into(),
-                " <s> ".blue().bold(),
-            ]),
+            View::Peripheral(_) => Line::from(vec![" Peripheral Scan: ".into(), " <s> ".blue().bold()]),
             View::Characteristic(_) => Line::from(vec![
                 " Go pack to peripheral view ".into(),
                 "<Esc>".blue().bold(),
@@ -229,9 +246,10 @@ impl<'a> Widget for DisplayWidget<'a> {
                 Constraint::Percentage(80),
                 Constraint::Percentage(10),
             ]);
-        let [top_area, mid_area, lower_area] = layout.areas(outline_block_inner_area);
+        let [_top_area, mid_area, lower_area] = layout.areas(outline_block_inner_area);
 
         self.render_command_area(lower_area, buf);
+        self.render_data_area(mid_area, buf);
         outline_block.render(area, buf);
 
         // self.render_title_area(title_area, buf);
