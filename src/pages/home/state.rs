@@ -1,6 +1,6 @@
 use iot_sdk::{Characteristic, Peripheral, PlatformPeripheral};
 
-#[derive(Default, Debug)]
+#[derive(Debug)]
 pub struct State {
     peripheral_index: usize,
     characteristic_index: usize,
@@ -19,7 +19,7 @@ impl State {
     }
 
     pub fn get_characteristics(&self) -> Option<&Vec<Characteristic>> {
-        if self.characteristics.is_empty() {
+        if self.characteristics[self.peripheral_index].is_empty() {
             None
         } else {
             Some(&self.characteristics[self.peripheral_index])
@@ -91,4 +91,16 @@ impl State {
 
 fn evaluate_wrapping_index(current_index: isize, update: isize, len: isize) -> usize {
     ((current_index + update).rem_euclid(len)) as usize
+}
+
+impl Default for State {
+    fn default() -> Self {
+        Self {
+            peripheral_index: 0,
+            characteristic_index: 0,
+            peripherals: Vec::new(),
+            local_names: Vec::new(),
+            characteristics: vec![vec![]; 1],
+        }
+    }
 }

@@ -253,9 +253,6 @@ impl<'a> Widget for DisplayWidget<'a> {
         self.render_command_area(lower_area, buf);
         self.render_data_area(mid_area, buf);
         outline_block.render(area, buf);
-
-        // self.render_title_area(title_area, buf);
-        // self.render_data_area(data_area, buf);
     }
 }
 

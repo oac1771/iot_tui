@@ -68,12 +68,16 @@ impl Page for HomePage {
                     }
                     KeyCode::Up => self.state.update_peripheral_index(-1),
                     KeyCode::Down => self.state.update_peripheral_index(1),
+                    KeyCode::Right if self.state.get_characteristics().is_some() => {
+                        self.view = View::Characteristic(ViewState::Idle)
+                    }
                     _ => {}
                 },
                 View::Characteristic(ViewState::Idle) => match key_event.code {
                     KeyCode::Esc => self.view = View::Peripheral(ViewState::Idle),
                     KeyCode::Up => self.state.update_characteristic_index(-1),
                     KeyCode::Down => self.state.update_characteristic_index(1),
+                    KeyCode::Left => self.view = View::Peripheral(ViewState::Idle),
                     // KeyCode::Enter if !self.state.get_characteristics().is_empty() => {
                     //     let characteristics = self.state.get_characteristics();
                     //     let index = self.state.get_characteristic_index();
