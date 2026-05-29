@@ -1,7 +1,5 @@
 use iot_sdk::{Characteristic, Peripheral, PlatformPeripheral};
 
-use crate::utils::evaluate_wrapping_index;
-
 #[derive(Default, Debug)]
 pub struct State {
     peripheral_index: usize,
@@ -20,8 +18,12 @@ impl State {
         &self.peripherals[self.peripheral_index]
     }
 
-    pub fn get_characteristics(&self) -> &Vec<Characteristic> {
-        &self.characteristics[self.peripheral_index]
+    pub fn get_characteristics(&self) -> Option<&Vec<Characteristic>> {
+        if self.characteristics.is_empty() {
+            None
+        } else {
+            Some(&self.characteristics[self.peripheral_index])
+        }
     }
 
     pub fn get_peripheral_index(&self) -> usize {
@@ -85,4 +87,8 @@ impl State {
         };
         self.characteristic_index = index;
     }
+}
+
+fn evaluate_wrapping_index(current_index: isize, update: isize, len: isize) -> usize {
+    ((current_index + update).rem_euclid(len)) as usize
 }

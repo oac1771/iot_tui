@@ -60,11 +60,11 @@ impl App {
                     }
                 }
 
-                Some(peripheral_client_response) = self.peripherals_init.peripherals_resp_rx.recv() => {self.handle_peripheral_client_response(peripheral_client_response).await}
                 Some(peripheral_client_request) = self.peripherals_init.peripherals_req_rx.recv() => {
                     self.peripherals_init.peripherals.handle_request(peripheral_client_request, &self.peripherals_init.peripherals_resp_tx).await;
                     Ok(())
                 }
+                Some(peripheral_client_response) = self.peripherals_init.peripherals_resp_rx.recv() => {self.handle_peripheral_client_response(peripheral_client_response).await}
 
             };
 

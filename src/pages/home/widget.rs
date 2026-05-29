@@ -62,6 +62,7 @@ impl<'a> DisplayWidget<'a> {
         let characteristics_entry = self
             .state
             .get_characteristics()
+            .unwrap_or(&vec![])
             .iter()
             .map(|c| ListItem::new(Line::from(format!("UUID: {}", c.uuid)).centered()))
             .collect::<Vec<ListItem>>();
@@ -162,29 +163,28 @@ impl<'a> DisplayWidget<'a> {
             .border_set(border::DOUBLE)
             .title_top(Line::from(" Characteristics ").centered());
 
-        match &self.view {
-            View::Peripheral(ViewState::Idle) => {
-                self.render_peripheral_names(left_area, buf, &peripheral_block)
-            }
-            View::Peripheral(ViewState::Scanning((spinner, scanning_message))) => self
-                .render_peripheral_scan_spinner(
-                    left_area,
-                    buf,
-                    spinner,
-                    &peripheral_block,
-                    scanning_message,
-                ),
-            View::Characteristic(ViewState::Idle) => {
-                self.render_characteristics(right_area, buf, &characteristic_block)
-            }
-            View::Characteristic(ViewState::Scanning((spinner, scanning_message))) => self
-                .render_characteristic_scan_spinner(
-                    right_area,
-                    buf,
-                    spinner,
-                    &characteristic_block,
-                    scanning_message,
-                ),
+        if let View::Peripheral(ViewState::Scanning((spinner, scanning_message))) = self.view {
+            self.render_peripheral_scan_spinner(
+                left_area,
+                buf,
+                spinner,
+                &peripheral_block,
+                scanning_message,
+            )
+        } else if !self.state.get_local_names().is_empty() {
+            self.render_peripheral_names(left_area, buf, &peripheral_block)
+        }
+
+        if let View::Characteristic(ViewState::Scanning((spinner, scanning_message))) = self.view {
+            self.render_characteristic_scan_spinner(
+                right_area,
+                buf,
+                spinner,
+                &characteristic_block,
+                scanning_message,
+            )
+        } else if self.state.get_characteristics().is_some() {
+            self.render_characteristics(right_area, buf, &characteristic_block)
         }
 
         peripheral_block.render(left_area, buf);
@@ -212,7 +212,9 @@ impl<'a> DisplayWidget<'a> {
         Paragraph::new(global_cmds).render(global_cmd_area, buf);
 
         let view_specific_cmds = match self.view {
-            View::Peripheral(_) => Line::from(vec![" Peripheral Scan: ".into(), " <s> ".blue().bold()]),
+            View::Peripheral(_) => {
+                Line::from(vec![" Peripheral Scan: ".into(), " <s> ".blue().bold()])
+            }
             View::Characteristic(_) => Line::from(vec![
                 " Go pack to peripheral view ".into(),
                 "<Esc>".blue().bold(),
