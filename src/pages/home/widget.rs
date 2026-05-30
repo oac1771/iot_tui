@@ -74,7 +74,7 @@ impl<'a> DisplayWidget<'a> {
         StatefulWidget::render(
             List::new(characteristics_entry)
                 .block(block.clone())
-                .highlight_style(Style::new().bold().green()),
+                .highlight_style(Style::new().bold().magenta()),
             area,
             buf,
             &mut characteristic_list_state,
@@ -191,41 +191,72 @@ impl<'a> DisplayWidget<'a> {
         characteristic_block.render(right_area, buf)
     }
 
+    fn render_global_command_area(&self, area: Rect, buf: &mut Buffer) {
+        let layout = Layout::default()
+            .direction(Direction::Horizontal)
+            .flex(Flex::Center)
+            .constraints(vec![
+                Constraint::Percentage(33),
+                Constraint::Percentage(33),
+                Constraint::Percentage(33),
+            ]);
+
+        let [_, global_cmd_area, _] = layout.areas(area);
+
+        let mut cmds =
+            vec![Line::from(vec![" Quit: ".into(), " Ctrl + c ".blue().bold()]).centered()];
+
+        if self.state.get_characteristics().is_some() {
+            cmds.push(
+                Line::from(vec![
+                    " Navigate: ".into(),
+                    " <Up/Down/Right/Left> ".blue().bold(),
+                ])
+                .centered(),
+            );
+        } else {
+            cmds.push(
+                Line::from(vec![" Navigate: ".into(), " <Up/Down> ".blue().bold()]).centered(),
+            );
+        }
+
+        let global_cmds = Text::from(cmds);
+
+        Paragraph::new(global_cmds).render(global_cmd_area, buf);
+    }
+
     fn render_command_area(&self, area: Rect, buf: &mut Buffer) {
         let layout = Layout::default()
             .direction(Direction::Horizontal)
             .flex(Flex::Center)
             .constraints(vec![
-                Constraint::Percentage(25),
-                Constraint::Percentage(25),
-                Constraint::Percentage(25),
-                Constraint::Percentage(25),
+                Constraint::Percentage(33),
+                Constraint::Percentage(33),
+                Constraint::Percentage(33),
             ]);
 
-        let [_, global_cmd_area, view_specific_area, _] = layout.areas(area);
+        let [command_area, _, _] = layout.areas(area);
 
-        let global_cmds = Text::from(vec![
-            Line::from(vec![" Navigate: ".into(), " Up/Down ".blue().bold()]).centered(),
-            Line::from(vec![" Quit: ".into(), " Ctrl + c ".blue().bold()]).centered(),
-        ]);
+        let mut cmds = vec![Line::from(vec![
+            " Peripheral Scan: ".into(),
+            " <s> ".blue().bold(),
+        ])];
 
-        Paragraph::new(global_cmds).render(global_cmd_area, buf);
+        if !self.state.get_local_names().is_empty() {
+            cmds.push(
+                Line::from(vec![
+                    " Characteristic Scan: ".into(),
+                    " <Enter> ".blue().bold(),
+                ])
+                .centered(),
+            );
+        }
 
-        let view_specific_cmds = match self.view {
-            View::Peripheral(_) => {
-                Line::from(vec![" Peripheral Scan: ".into(), " <s> ".blue().bold()])
-            }
-            View::Characteristic(_) => Line::from(vec![
-                " Go pack to peripheral view ".into(),
-                "<Esc>".blue().bold(),
-            ]),
-        };
+        let view_specific_cmds = Text::from(cmds);
 
         Paragraph::new(view_specific_cmds.centered())
-            .white()
             .centered()
-            .wrap(Wrap { trim: true })
-            .render(view_specific_area, buf);
+            .render(command_area, buf);
     }
 }
 
@@ -248,10 +279,11 @@ impl<'a> Widget for DisplayWidget<'a> {
                 Constraint::Percentage(80),
                 Constraint::Percentage(10),
             ]);
-        let [_top_area, mid_area, lower_area] = layout.areas(outline_block_inner_area);
+        let [top_area, mid_area, lower_area] = layout.areas(outline_block_inner_area);
 
-        self.render_command_area(lower_area, buf);
+        self.render_global_command_area(lower_area, buf);
         self.render_data_area(mid_area, buf);
+        self.render_command_area(top_area, buf);
         outline_block.render(area, buf);
     }
 }

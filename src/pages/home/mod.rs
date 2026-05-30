@@ -74,7 +74,6 @@ impl Page for HomePage {
                     _ => {}
                 },
                 View::Characteristic(ViewState::Idle) => match key_event.code {
-                    KeyCode::Esc => self.view = View::Peripheral(ViewState::Idle),
                     KeyCode::Up => self.state.update_characteristic_index(-1),
                     KeyCode::Down => self.state.update_characteristic_index(1),
                     KeyCode::Left => self.view = View::Peripheral(ViewState::Idle),
