@@ -1,1 +1,1 @@
-flex area for column in bottom area https://ratatui.rs/concepts/layout/#flex-layouts
+- render characteristic flags in top area when going through list

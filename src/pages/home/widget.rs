@@ -228,13 +228,9 @@ impl<'a> DisplayWidget<'a> {
         let layout = Layout::default()
             .direction(Direction::Horizontal)
             .flex(Flex::Center)
-            .constraints(vec![
-                Constraint::Percentage(33),
-                Constraint::Percentage(33),
-                Constraint::Percentage(33),
-            ]);
+            .constraints(vec![Constraint::Percentage(33), Constraint::Percentage(66)]);
 
-        let [command_area, _, _] = layout.areas(area);
+        let [view_command_area, foo_area] = layout.areas(area);
 
         let mut cmds = vec![Line::from(vec![
             " Peripheral Scan: ".into(),
@@ -255,7 +251,19 @@ impl<'a> DisplayWidget<'a> {
 
         Paragraph::new(view_specific_cmds.centered())
             .centered()
-            .render(command_area, buf);
+            .render(view_command_area, buf);
+
+        if let Some(characteristics) = self.state.get_characteristics() {
+            let index = self.state.get_characteristic_index();
+            let characteristic = &characteristics[index];
+            let foo = characteristic
+                .properties
+                .iter()
+                .map(|p| Line::from(format!("{:?}", p)))
+                .collect::<Vec<Line>>();
+
+            Paragraph::new(foo).centered().render(foo_area, buf);
+        }
     }
 }
 
