@@ -71,14 +71,13 @@ impl<'a> DisplayWidget<'a> {
         let mut characteristic_list_state = ListState::default();
         characteristic_list_state.select(Some(index));
 
-        StatefulWidget::render(
-            List::new(characteristics_entry)
-                .block(block.clone())
-                .highlight_style(Style::new().bold().magenta()),
-            area,
-            buf,
-            &mut characteristic_list_state,
-        );
+        let mut list = List::new(characteristics_entry).block(block.clone());
+
+        if let View::Characteristic(ViewState::Idle) = self.view {
+            list = list.highlight_style(Style::new().bold().magenta());
+        };
+
+        StatefulWidget::render(list, area, buf, &mut characteristic_list_state);
     }
 
     fn render_peripheral_scan_spinner(
