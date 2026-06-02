@@ -1,3 +1,8 @@
+use crate::{
+    pages::home::{View, ViewState, state::State},
+    utils::spinner::Spinner,
+};
+use iot_sdk::CharPropFlags;
 use ratatui::{
     buffer::Buffer,
     layout::{Alignment, Constraint, Direction, Flex, Layout, Rect},
@@ -5,11 +10,6 @@ use ratatui::{
     symbols::border,
     text::{Line, Text},
     widgets::{Block, Clear, List, ListItem, ListState, Paragraph, StatefulWidget, Widget, Wrap},
-};
-
-use crate::{
-    pages::home::{View, ViewState, state::State},
-    utils::spinner::Spinner,
 };
 
 pub enum HomeWidget<'a> {
@@ -148,7 +148,7 @@ impl<'a> DisplayWidget<'a> {
         paragraph.render(center_area, buf);
     }
 
-    fn render_data_area(&self, area: Rect, buf: &mut Buffer) {
+    fn render_mid_area(&self, area: Rect, buf: &mut Buffer) {
         let layout = Layout::default()
             .direction(Direction::Horizontal)
             .constraints(vec![Constraint::Percentage(40), Constraint::Percentage(60)]);
@@ -190,7 +190,7 @@ impl<'a> DisplayWidget<'a> {
         characteristic_block.render(right_area, buf)
     }
 
-    fn render_global_command_area(&self, area: Rect, buf: &mut Buffer) {
+    fn render_lower_area(&self, area: Rect, buf: &mut Buffer) {
         let layout = Layout::default()
             .direction(Direction::Horizontal)
             .flex(Flex::Center)
@@ -224,13 +224,13 @@ impl<'a> DisplayWidget<'a> {
         Paragraph::new(global_cmds).render(global_cmd_area, buf);
     }
 
-    fn render_command_area(&self, area: Rect, buf: &mut Buffer) {
+    fn render_top_area(&self, area: Rect, buf: &mut Buffer) {
         let layout = Layout::default()
             .direction(Direction::Horizontal)
             .flex(Flex::Center)
             .constraints(vec![Constraint::Percentage(33), Constraint::Percentage(66)]);
 
-        let [view_command_area, charactaristic_properties_area] = layout.areas(area);
+        let [view_command_area, _] = layout.areas(area);
 
         let mut cmds = Vec::new();
 
@@ -247,7 +247,16 @@ impl<'a> DisplayWidget<'a> {
                 );
             }
         } else if let View::Characteristic(ViewState::Idle) = self.view {
-            cmds.push(Line::from(vec![" Write ".into(), " <w> ".blue().bold()]))
+            if let Some(characteristic) = self.state.get_indexed_characteristic() {
+                if characteristic.properties.contains(CharPropFlags::READ) {
+                    let charactaristic_properties =
+                        Line::from(vec![" Read: ".into(), " <r> ".blue().bold()]).centered();
+
+                    Paragraph::new(charactaristic_properties)
+                        .centered()
+                        .render(view_command_area, buf);
+                }
+            }
         }
 
         let view_specific_cmds = Text::from(cmds);
@@ -255,24 +264,6 @@ impl<'a> DisplayWidget<'a> {
         Paragraph::new(view_specific_cmds.centered())
             .centered()
             .render(view_command_area, buf);
-
-        if let Some(characteristics) = self.state.get_characteristics() {
-            let index = self.state.get_characteristic_index();
-            let characteristic = &characteristics[index];
-            let charactaristic_properties = characteristic
-                .properties
-                .iter()
-                .map(|p| Line::from(format!("{p:?}")))
-                .collect::<Vec<Line>>();
-
-            Paragraph::new(charactaristic_properties)
-                .centered()
-                .render(charactaristic_properties_area, buf);
-        }
-
-        if let View::Characteristic(ViewState::Edditing) = self.view {
-            println!("Editinggggg")
-        }
     }
 }
 
@@ -297,9 +288,9 @@ impl<'a> Widget for DisplayWidget<'a> {
             ]);
         let [top_area, mid_area, lower_area] = layout.areas(outline_block_inner_area);
 
-        self.render_global_command_area(lower_area, buf);
-        self.render_data_area(mid_area, buf);
-        self.render_command_area(top_area, buf);
+        self.render_lower_area(lower_area, buf);
+        self.render_mid_area(mid_area, buf);
+        self.render_top_area(top_area, buf);
         outline_block.render(area, buf);
     }
 }

@@ -18,6 +18,14 @@ impl State {
         &self.peripherals[self.peripheral_index]
     }
 
+    pub fn get_indexed_characteristic(&self) -> Option<&Characteristic> {
+        if let Some(characteristic) = self.get_characteristics() {
+            Some(&characteristic[self.characteristic_index])
+        } else {
+            None
+        }
+    }
+
     pub fn get_characteristics(&self) -> Option<&Vec<Characteristic>> {
         if self.characteristics[self.peripheral_index].is_empty() {
             None

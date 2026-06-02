@@ -29,7 +29,7 @@ enum View {
 enum ViewState {
     Idle,
     Scanning((Spinner, String)),
-    Edditing,
+    // Edditing,
 }
 
 impl HomePage {
@@ -78,7 +78,7 @@ impl Page for HomePage {
                     KeyCode::Up => self.state.update_characteristic_index(-1),
                     KeyCode::Down => self.state.update_characteristic_index(1),
                     KeyCode::Left => self.view = View::Peripheral(ViewState::Idle),
-                    KeyCode::Char('w') => self.view = View::Characteristic(ViewState::Edditing),
+                    // KeyCode::Char('w') => self.view = View::Characteristic(ViewState::Edditing),
                     // KeyCode::Enter if !self.state.get_characteristics().is_empty() => {
                     //     let characteristics = self.state.get_characteristics();
                     //     let index = self.state.get_characteristic_index();
@@ -87,11 +87,11 @@ impl Page for HomePage {
                     // }
                     _ => {}
                 },
-                View::Characteristic(ViewState::Edditing) => {
-                    if let KeyCode::Char('q') = key_event.code {
-                        self.view = View::Characteristic(ViewState::Idle)
-                    }
-                }
+                // View::Characteristic(ViewState::Edditing) => {
+                //     if let KeyCode::Char('q') = key_event.code {
+                //         self.view = View::Characteristic(ViewState::Idle)
+                //     }
+                // }
                 _ => {}
             }
         } else if key_event.kind == KeyEventKind::Press && self.error.is_some() {
