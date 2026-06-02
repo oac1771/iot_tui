@@ -230,21 +230,24 @@ impl<'a> DisplayWidget<'a> {
             .flex(Flex::Center)
             .constraints(vec![Constraint::Percentage(33), Constraint::Percentage(66)]);
 
-        let [view_command_area, foo_area] = layout.areas(area);
+        let [view_command_area, charactaristic_properties_area] = layout.areas(area);
 
-        let mut cmds = vec![Line::from(vec![
-            " Peripheral Scan: ".into(),
-            " <s> ".blue().bold(),
-        ])];
+        let mut cmds = Vec::new();
 
-        if !self.state.get_local_names().is_empty() {
-            cmds.push(
-                Line::from(vec![
-                    " Characteristic Scan: ".into(),
-                    " <Enter> ".blue().bold(),
-                ])
-                .centered(),
-            );
+        if let View::Peripheral(ViewState::Idle) = self.view {
+            cmds.push(Line::from(vec![
+                " Peripheral Scan: ".into(),
+                " <s> ".blue().bold(),
+            ]));
+
+            if !self.state.get_local_names().is_empty() {
+                cmds.push(
+                    Line::from(vec![" Characteristic Scan: ".into(), " <c> ".blue().bold()])
+                        .centered(),
+                );
+            }
+        } else if let View::Characteristic(ViewState::Idle) = self.view {
+            cmds.push(Line::from(vec![" Write ".into(), " <w> ".blue().bold()]))
         }
 
         let view_specific_cmds = Text::from(cmds);
@@ -256,13 +259,19 @@ impl<'a> DisplayWidget<'a> {
         if let Some(characteristics) = self.state.get_characteristics() {
             let index = self.state.get_characteristic_index();
             let characteristic = &characteristics[index];
-            let foo = characteristic
+            let charactaristic_properties = characteristic
                 .properties
                 .iter()
-                .map(|p| Line::from(format!("{:?}", p)))
+                .map(|p| Line::from(format!("{p:?}")))
                 .collect::<Vec<Line>>();
 
-            Paragraph::new(foo).centered().render(foo_area, buf);
+            Paragraph::new(charactaristic_properties)
+                .centered()
+                .render(charactaristic_properties_area, buf);
+        }
+
+        if let View::Characteristic(ViewState::Edditing) = self.view {
+            println!("Editinggggg")
         }
     }
 }
