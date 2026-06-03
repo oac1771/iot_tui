@@ -101,15 +101,11 @@ impl<'a> DisplayWidget<'a> {
 
         let center_area = layout[1];
 
-        let message = if !scanning_message.is_empty() {
-            scanning_message
-        } else {
-            "Scanning For Peripherals..."
-        };
-
-        let paragraph =
-            Paragraph::new(vec![Line::raw(message), Line::from(spinner.frame()).bold()])
-                .alignment(Alignment::Center);
+        let paragraph = Paragraph::new(vec![
+            Line::raw(scanning_message),
+            Line::from(spinner.frame()).bold(),
+        ])
+        .alignment(Alignment::Center);
 
         paragraph.render(center_area, buf);
     }
@@ -135,15 +131,11 @@ impl<'a> DisplayWidget<'a> {
 
         let center_area = layout[1];
 
-        let message = if !scanning_message.is_empty() {
-            scanning_message
-        } else {
-            "Scanning For Characteristics..."
-        };
-
-        let paragraph =
-            Paragraph::new(vec![Line::raw(message), Line::from(spinner.frame()).bold()])
-                .alignment(Alignment::Center);
+        let paragraph = Paragraph::new(vec![
+            Line::raw(scanning_message),
+            Line::from(spinner.frame()).bold(),
+        ])
+        .alignment(Alignment::Center);
 
         paragraph.render(center_area, buf);
     }

@@ -82,16 +82,13 @@ impl Page for HomePage {
                     KeyCode::Char('r') => {
                         if let Some(characteristic) = self.state.get_indexed_characteristic() {
                             if characteristic.properties.contains(CharPropFlags::READ) {
-                                println!("foo")
+                                let peripheral = self.state.get_indexed_peripheral();
+                                self.peripherals_client
+                                    .read(peripheral.clone(), characteristic.uuid)
+                                    .await?;
                             }
                         }
                     }
-                    // KeyCode::Enter if !self.state.get_characteristics().is_empty() => {
-                    //     let characteristics = self.state.get_characteristics();
-                    //     let index = self.state.get_characteristic_index();
-                    //     let characteristic = &characteristics[index];
-                    //     self.call_characteristic(characteristic).await?
-                    // }
                     _ => {}
                 },
                 // View::Characteristic(ViewState::Edditing) => {
@@ -117,8 +114,10 @@ impl Page for HomePage {
         match peripheral_client_response {
             PeripheralResponse::PeripheralScanStarted => {
                 self.state.clear_peripherals();
-                self.view =
-                    View::Peripheral(ViewState::Scanning((Spinner::default(), String::new())))
+                self.view = View::Peripheral(ViewState::Scanning((
+                    Spinner::default(),
+                    String::from("Scanning For Peripherals..."),
+                )))
             }
             PeripheralResponse::GetPheripherals(peripherals) => {
                 self.view = View::Peripheral(ViewState::Idle);
@@ -130,8 +129,10 @@ impl Page for HomePage {
                 self.error = Some(err);
             }
             PeripheralResponse::CharacteristicScanStarted => {
-                self.view =
-                    View::Characteristic(ViewState::Scanning((Spinner::default(), String::new())))
+                self.view = View::Characteristic(ViewState::Scanning((
+                    Spinner::default(),
+                    String::from("Scanning For Characteristics..."),
+                )))
             }
             PeripheralResponse::GetCharacteristics(characteristics) => {
                 self.view = View::Characteristic(ViewState::Idle);
@@ -150,6 +151,16 @@ impl Page for HomePage {
             PeripheralResponse::CharacteristicScanError(err) => {
                 self.view = View::Peripheral(ViewState::Idle);
                 self.error = Some(err);
+            }
+            PeripheralResponse::ReadCharacteristicCallStarted => {
+                self.view = View::Characteristic(ViewState::Scanning((
+                    Spinner::default(),
+                    String::from("Sending Read Request..."),
+                )))
+            }
+            PeripheralResponse::ReadCharacteristic(result) => {
+                self.view = View::Characteristic(ViewState::Idle);
+                println!("{:?}", result);
             }
         };
         Ok(())

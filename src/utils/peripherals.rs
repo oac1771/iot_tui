@@ -1,6 +1,6 @@
 use futures::FutureExt;
 use futures_util::StreamExt;
-use iot_sdk::{Characteristic, Peripheral, PlatformPeripheral, central::Central};
+use iot_sdk::{Characteristic, Peripheral, PlatformPeripheral, Uuid, central::Central};
 use std::pin::Pin;
 use tokio::{
     select,
@@ -38,6 +38,7 @@ pub struct PeripheralsClient(Sender<PeripheralRequest>);
 pub enum PeripheralRequest {
     GetPheripherals,
     GetCharacteristics(PlatformPeripheral),
+    Read((PlatformPeripheral, Uuid)),
 }
 
 #[derive(Debug)]
@@ -49,6 +50,8 @@ pub enum PeripheralResponse {
     ScanningMessageUpdate(String),
     GetCharacteristics(Vec<Characteristic>),
     CharacteristicScanError(String),
+    ReadCharacteristicCallStarted,
+    ReadCharacteristic(Vec<u8>),
 }
 
 impl Peripherals {
@@ -70,6 +73,9 @@ impl Peripherals {
                 PeripheralRequest::GetPheripherals => Self::get_peripherals(central, tx).boxed(),
                 PeripheralRequest::GetCharacteristics(peripheral) => {
                     Self::get_characteristics(tx, peripheral).boxed()
+                }
+                PeripheralRequest::Read((peripheral, characteristic_uuid)) => {
+                    Self::read_characteristic(central, tx, peripheral, characteristic_uuid).boxed()
                 }
             };
 
@@ -162,6 +168,38 @@ impl Peripherals {
 
         Ok(())
     }
+
+    async fn read_characteristic(
+        central: Central,
+        tx: Sender<PeripheralResponse>,
+        peripheral: PlatformPeripheral,
+        characteristic_uuid: Uuid,
+    ) -> Result<(), String> {
+        let result = async {
+            tx.send(PeripheralResponse::ReadCharacteristicCallStarted)
+                .await
+                .map_err(|e| e.to_string())?;
+
+            let result = central
+                .read(&peripheral, characteristic_uuid)
+                .await
+                .map_err(|e| e.to_string())?;
+
+            let response = PeripheralResponse::ReadCharacteristic(result);
+            tx.send(response).await.map_err(|e| e.to_string())?;
+
+            Ok(())
+        }
+        .await;
+
+        if let Err(err) = result {
+            tx.send(PeripheralResponse::CharacteristicScanError(err))
+                .await
+                .map_err(|e| e.to_string())?;
+        }
+
+        Ok(())
+    }
 }
 
 impl PeripheralsClient {
@@ -180,6 +218,16 @@ impl PeripheralsClient {
         let request = PeripheralRequest::GetCharacteristics(peripheral.clone());
         self.send_request(request).await?;
 
+        Ok(())
+    }
+
+    pub async fn read(
+        &self,
+        peripheral: PlatformPeripheral,
+        characteristic_uuid: Uuid,
+    ) -> Result<(), String> {
+        let request = PeripheralRequest::Read((peripheral, characteristic_uuid));
+        self.send_request(request).await?;
         Ok(())
     }
 
