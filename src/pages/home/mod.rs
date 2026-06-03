@@ -11,6 +11,7 @@ use crate::{
 
 use super::Page;
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind};
+use iot_sdk::CharPropFlags;
 use ratatui::widgets::Widget;
 use state::State;
 
@@ -78,7 +79,13 @@ impl Page for HomePage {
                     KeyCode::Up => self.state.update_characteristic_index(-1),
                     KeyCode::Down => self.state.update_characteristic_index(1),
                     KeyCode::Left => self.view = View::Peripheral(ViewState::Idle),
-                    // KeyCode::Char('w') => self.view = View::Characteristic(ViewState::Edditing),
+                    KeyCode::Char('r') => {
+                        if let Some(characteristic) = self.state.get_indexed_characteristic() {
+                            if characteristic.properties.contains(CharPropFlags::READ) {
+                                println!("foo")
+                            }
+                        }
+                    }
                     // KeyCode::Enter if !self.state.get_characteristics().is_empty() => {
                     //     let characteristics = self.state.get_characteristics();
                     //     let index = self.state.get_characteristic_index();
