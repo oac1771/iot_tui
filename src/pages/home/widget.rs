@@ -140,6 +140,22 @@ impl<'a> DisplayWidget<'a> {
         paragraph.render(center_area, buf);
     }
 
+    fn render_characteristic_response(
+        &self,
+        area: Rect,
+        buf: &mut Buffer,
+        block: &Block,
+        response: &[u8],
+    ) {
+        let response = String::from_utf8(response.to_owned()).unwrap_or(String::from("0.0"));
+
+        let paragraph = Paragraph::new(response)
+            .alignment(Alignment::Center)
+            .block(block.clone());
+
+        paragraph.render(area, buf);
+    }
+
     fn render_mid_area(&self, area: Rect, buf: &mut Buffer) {
         let layout = Layout::default()
             .direction(Direction::Horizontal)
@@ -174,6 +190,10 @@ impl<'a> DisplayWidget<'a> {
                 &characteristic_block,
                 scanning_message,
             )
+        } else if let View::Characteristic(ViewState::Payload(characteristic_id)) = self.view {
+            if let Some(response) = self.state.get_characteristic_response(characteristic_id) {
+                self.render_characteristic_response(area, buf, &characteristic_block, response);
+            }
         } else if self.state.get_characteristics().is_some() {
             self.render_characteristics(right_area, buf, &characteristic_block)
         }
@@ -238,17 +258,16 @@ impl<'a> DisplayWidget<'a> {
                         .centered(),
                 );
             }
-        } else if let View::Characteristic(ViewState::Idle) = self.view {
-            if let Some(characteristic) = self.state.get_indexed_characteristic() {
-                if characteristic.properties.contains(CharPropFlags::READ) {
-                    let charactaristic_properties =
-                        Line::from(vec![" Read: ".into(), " <r> ".blue().bold()]).centered();
+        } else if let View::Characteristic(ViewState::Idle) = self.view
+            && let Some(characteristic) = self.state.get_indexed_characteristic()
+            && characteristic.properties.contains(CharPropFlags::READ)
+        {
+            let charactaristic_properties =
+                Line::from(vec![" Read: ".into(), " <r> ".blue().bold()]).centered();
 
-                    Paragraph::new(charactaristic_properties)
-                        .centered()
-                        .render(view_command_area, buf);
-                }
-            }
+            Paragraph::new(charactaristic_properties)
+                .centered()
+                .render(view_command_area, buf);
         }
 
         let view_specific_cmds = Text::from(cmds);

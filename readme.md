@@ -1,1 +1,2 @@
-- render characteristic flags in top area when going through list
+- figure out how to render based on if iot device is found
+    - add known 

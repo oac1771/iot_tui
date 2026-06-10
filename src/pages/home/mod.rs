@@ -11,7 +11,7 @@ use crate::{
 
 use super::Page;
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind};
-use iot_sdk::CharPropFlags;
+use iot_sdk::{CharPropFlags, Uuid};
 use ratatui::widgets::Widget;
 use state::State;
 
@@ -30,7 +30,7 @@ enum View {
 enum ViewState {
     Idle,
     Scanning((Spinner, String)),
-    // Edditing,
+    Payload(Uuid),
 }
 
 impl HomePage {
@@ -80,28 +80,29 @@ impl Page for HomePage {
                     KeyCode::Down => self.state.update_characteristic_index(1),
                     KeyCode::Left => self.view = View::Peripheral(ViewState::Idle),
                     KeyCode::Char('r') => {
-                        if let Some(characteristic) = self.state.get_indexed_characteristic() {
-                            if characteristic.properties.contains(CharPropFlags::READ) {
-                                let peripheral = self.state.get_indexed_peripheral();
-                                self.peripherals_client
-                                    .read(peripheral.clone(), characteristic.uuid)
-                                    .await?;
-                            }
+                        if let Some(characteristic) = self.state.get_indexed_characteristic()
+                            && characteristic.properties.contains(CharPropFlags::READ)
+                        {
+                            let peripheral = self.state.get_indexed_peripheral();
+                            self.peripherals_client
+                                .read(peripheral.clone(), characteristic.uuid)
+                                .await?;
                         }
                     }
                     _ => {}
                 },
-                // View::Characteristic(ViewState::Edditing) => {
-                //     if let KeyCode::Char('q') = key_event.code {
-                //         self.view = View::Characteristic(ViewState::Idle)
-                //     }
-                // }
+                View::Characteristic(ViewState::Payload(_)) => {
+                    if key_event.code == KeyCode::Esc {
+                        self.view = View::Characteristic(ViewState::Idle)
+                    }
+                }
                 _ => {}
             }
-        } else if key_event.kind == KeyEventKind::Press && self.error.is_some() {
-            if let KeyCode::Esc = key_event.code {
-                self.error = None
-            }
+        } else if key_event.kind == KeyEventKind::Press
+            && self.error.is_some()
+            && let KeyCode::Esc = key_event.code
+        {
+            self.error = None
         }
 
         Ok(())
@@ -158,9 +159,10 @@ impl Page for HomePage {
                     String::from("Sending Read Request..."),
                 )))
             }
-            PeripheralResponse::ReadCharacteristic(result) => {
-                self.view = View::Characteristic(ViewState::Idle);
-                println!("{:?}", result);
+            PeripheralResponse::ReadCharacteristic((characteristic_id, response)) => {
+                self.view = View::Characteristic(ViewState::Payload(characteristic_id));
+                self.state
+                    .update_characteristic_response(characteristic_id, response);
             }
         };
         Ok(())

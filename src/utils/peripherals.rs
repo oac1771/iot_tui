@@ -51,7 +51,7 @@ pub enum PeripheralResponse {
     GetCharacteristics(Vec<Characteristic>),
     CharacteristicScanError(String),
     ReadCharacteristicCallStarted,
-    ReadCharacteristic(Vec<u8>),
+    ReadCharacteristic((Uuid, Vec<u8>)),
 }
 
 impl Peripherals {
@@ -185,7 +185,7 @@ impl Peripherals {
                 .await
                 .map_err(|e| e.to_string())?;
 
-            let response = PeripheralResponse::ReadCharacteristic(result);
+            let response = PeripheralResponse::ReadCharacteristic((characteristic_uuid, result));
             tx.send(response).await.map_err(|e| e.to_string())?;
 
             Ok(())

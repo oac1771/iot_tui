@@ -1,4 +1,5 @@
-use iot_sdk::{Characteristic, Peripheral, PlatformPeripheral};
+use iot_sdk::{Characteristic, Peripheral, PlatformPeripheral, Uuid};
+use std::collections::HashMap;
 
 #[derive(Debug)]
 pub struct State {
@@ -7,6 +8,7 @@ pub struct State {
     peripherals: Vec<PlatformPeripheral>,
     local_names: Vec<String>,
     characteristics: Vec<Vec<Characteristic>>,
+    characteristic_responses: HashMap<Uuid, Vec<u8>>,
 }
 
 impl State {
@@ -40,6 +42,10 @@ impl State {
 
     pub fn get_characteristic_index(&self) -> usize {
         self.characteristic_index
+    }
+
+    pub fn get_characteristic_response(&self, characteristic_id: &Uuid) -> Option<&Vec<u8>> {
+        self.characteristic_responses.get(characteristic_id)
     }
 
     pub async fn update_peripherals(&mut self, peripherals: Vec<PlatformPeripheral>) {
@@ -95,6 +101,11 @@ impl State {
         };
         self.characteristic_index = index;
     }
+
+    pub fn update_characteristic_response(&mut self, characteristic_id: Uuid, response: Vec<u8>) {
+        self.characteristic_responses
+            .insert(characteristic_id, response);
+    }
 }
 
 fn evaluate_wrapping_index(current_index: isize, update: isize, len: isize) -> usize {
@@ -109,6 +120,7 @@ impl Default for State {
             peripherals: Vec::new(),
             local_names: Vec::new(),
             characteristics: vec![vec![]; 1],
+            characteristic_responses: HashMap::new(),
         }
     }
 }
