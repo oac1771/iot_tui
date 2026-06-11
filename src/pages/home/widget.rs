@@ -2,7 +2,7 @@ use crate::{
     pages::home::{View, ViewState, state::State},
     utils::spinner::Spinner,
 };
-use iot_sdk::CharPropFlags;
+use iot_sdk::{CharPropFlags, Uuid};
 use ratatui::{
     buffer::Buffer,
     layout::{Alignment, Constraint, Direction, Flex, Layout, Rect},
@@ -146,14 +146,24 @@ impl<'a> DisplayWidget<'a> {
         buf: &mut Buffer,
         block: &Block,
         response: &[u8],
+        characteristic_id: Uuid,
     ) {
+        let inner = block.inner(area);
+        let layout = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Percentage(50),
+                Constraint::Length(3),
+                Constraint::Percentage(50),
+            ])
+            .split(inner);
+        let center_area = layout[1];
+
         let response = String::from_utf8(response.to_owned()).unwrap_or(String::from("0.0"));
 
-        let paragraph = Paragraph::new(response)
-            .alignment(Alignment::Center)
-            .block(block.clone());
+        let paragraph = Paragraph::new(response).alignment(Alignment::Center);
 
-        paragraph.render(area, buf);
+        paragraph.render(center_area, buf);
     }
 
     fn render_mid_area(&self, area: Rect, buf: &mut Buffer) {
@@ -192,7 +202,13 @@ impl<'a> DisplayWidget<'a> {
             )
         } else if let View::Characteristic(ViewState::Payload(characteristic_id)) = self.view {
             if let Some(response) = self.state.get_characteristic_response(characteristic_id) {
-                self.render_characteristic_response(area, buf, &characteristic_block, response);
+                self.render_characteristic_response(
+                    right_area,
+                    buf,
+                    &characteristic_block,
+                    response,
+                    *characteristic_id,
+                );
             }
         } else if self.state.get_characteristics().is_some() {
             self.render_characteristics(right_area, buf, &characteristic_block)
