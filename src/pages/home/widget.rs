@@ -262,12 +262,20 @@ impl<'a> DisplayWidget<'a> {
             && let Some(characteristic) = self.state.get_indexed_characteristic()
             && characteristic.properties.contains(CharPropFlags::READ)
         {
-            let charactaristic_properties =
-                Line::from(vec![" Read: ".into(), " <r> ".blue().bold()]).centered();
-
-            Paragraph::new(charactaristic_properties)
-                .centered()
-                .render(view_command_area, buf);
+            cmds.push(Line::from(vec![" Read: ".into(), " <r> ".blue().bold()]).centered());
+        } else if let View::Characteristic(ViewState::Payload(characteristic_id)) = self.view
+            && self
+                .state
+                .get_characteristic_response(characteristic_id)
+                .is_some()
+        {
+            cmds.push(
+                Line::from(vec![
+                    " Go back to Characteristic View: ".into(),
+                    " <Esc> ".blue().bold(),
+                ])
+                .centered(),
+            );
         }
 
         let view_specific_cmds = Text::from(cmds);
