@@ -1,6 +1,10 @@
 use futures::FutureExt;
 use futures_util::StreamExt;
 use iot_sdk::{Characteristic, Peripheral, PlatformPeripheral, Uuid, central::Central};
+use services::{
+    health::{HEALTH_PING_CHAR_UUID, HEALTH_STATUS_CHAR_UUID, Pong},
+    trouble_host::types::gatt_traits::FromGatt,
+};
 use std::pin::Pin;
 use tokio::{
     select,
@@ -235,5 +239,27 @@ impl PeripheralsClient {
         self.0.send(request).await.map_err(|e| e.to_string())?;
 
         Ok(())
+    }
+}
+
+pub enum KnownCharacteristic {
+    Ping(Pong),
+    Status(bool),
+}
+
+pub fn check_known_characteristic(
+    characteristic_id: Uuid,
+    data: &[u8],
+) -> Result<Option<KnownCharacteristic>, String> {
+    if characteristic_id == HEALTH_PING_CHAR_UUID {
+        Ok(Some(KnownCharacteristic::Ping(
+            <Pong as FromGatt>::from_gatt(data).map_err(|e| format!("{e:?}"))?,
+        )))
+    } else if characteristic_id == HEALTH_STATUS_CHAR_UUID {
+        Ok(Some(KnownCharacteristic::Status(
+            <bool as FromGatt>::from_gatt(data).map_err(|e| format!("{e:?}"))?,
+        )))
+    } else {
+        Ok(None)
     }
 }

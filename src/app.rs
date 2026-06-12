@@ -69,7 +69,8 @@ impl App {
             };
 
             if let Err(err) = result {
-                panic!("Error in event loop {err}");
+                println!("Error in event loop {err}");
+                break;
             }
         }
 

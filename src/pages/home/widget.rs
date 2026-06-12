@@ -1,6 +1,9 @@
 use crate::{
     pages::home::{View, ViewState, state::State},
-    utils::spinner::Spinner,
+    utils::{
+        peripherals::{KnownCharacteristic, check_known_characteristic},
+        spinner::Spinner,
+    },
 };
 use iot_sdk::{CharPropFlags, Uuid};
 use ratatui::{
@@ -159,11 +162,26 @@ impl<'a> DisplayWidget<'a> {
             .split(inner);
         let center_area = layout[1];
 
-        let response = String::from_utf8(response.to_owned()).unwrap_or(String::from("0.0"));
+        match check_known_characteristic(characteristic_id, response) {
+            Ok(data) => {
+                let text = if let Some(known_characteristic) = data {
+                    match known_characteristic {
+                        KnownCharacteristic::Ping(pong) => Text::from(format!("{pong}")),
+                        KnownCharacteristic::Status(status) => Text::from(format!("{status}")),
+                    }
+                } else {
+                    Text::from(
+                        String::from_utf8(response.to_owned()).unwrap_or(String::from("0.0")),
+                    )
+                };
 
-        let paragraph = Paragraph::new(response).alignment(Alignment::Center);
-
-        paragraph.render(center_area, buf);
+                let paragraph = Paragraph::new(text).alignment(Alignment::Center);
+                paragraph.render(center_area, buf);
+            }
+            Err(err) => {
+                PopUpErrorWidget::new(err.as_str()).render(area, buf);
+            }
+        }
     }
 
     fn render_mid_area(&self, area: Rect, buf: &mut Buffer) {
