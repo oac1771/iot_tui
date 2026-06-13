@@ -89,6 +89,14 @@ impl Page for HomePage {
                                 .await?;
                         }
                     }
+                    KeyCode::Char('w') => {
+                        if let Some(characteristic) = self.state.get_indexed_characteristic()
+                            && characteristic.properties.contains(CharPropFlags::WRITE)
+                        {
+                            println!("Sending write!")
+                            // change view State to editing
+                        }
+                    }
                     _ => {}
                 },
                 View::Characteristic(ViewState::Payload(_)) => {

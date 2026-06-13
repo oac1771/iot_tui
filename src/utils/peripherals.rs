@@ -247,6 +247,15 @@ pub enum KnownCharacteristic {
     Status(bool),
 }
 
+impl KnownCharacteristic {
+    pub fn display_name(&self) -> &str {
+        match &self {
+            KnownCharacteristic::Ping(_) => "HEALTH_PING",
+            KnownCharacteristic::Status(_) => "HEALTH_STATUS",
+        }
+    }
+}
+
 pub fn check_known_characteristic(
     characteristic_id: Uuid,
     data: &[u8],

@@ -62,19 +62,26 @@ impl<'a> DisplayWidget<'a> {
     }
 
     fn render_characteristics(&self, area: Rect, buf: &mut Buffer, block: &Block) {
-        let characteristics_entry = self
+        let characteristic_entries = self
             .state
             .get_characteristics()
             .unwrap_or(&vec![])
             .iter()
-            .map(|c| ListItem::new(Line::from(format!("UUID: {}", c.uuid)).centered()))
+            .map(|c| {
+                let entry = if let Ok(Some(known)) = check_known_characteristic(c.uuid, &[]) {
+                    known.display_name().to_string()
+                } else {
+                    format!("UUID: {}", c.uuid)
+                };
+                ListItem::new(Line::from(entry).centered())
+            })
             .collect::<Vec<ListItem>>();
 
         let index = self.state.get_characteristic_index();
         let mut characteristic_list_state = ListState::default();
         characteristic_list_state.select(Some(index));
 
-        let mut list = List::new(characteristics_entry).block(block.clone());
+        let mut list = List::new(characteristic_entries).block(block.clone());
 
         if let View::Characteristic(ViewState::Idle) = self.view {
             list = list.highlight_style(Style::new().bold().magenta());
@@ -297,6 +304,11 @@ impl<'a> DisplayWidget<'a> {
             && characteristic.properties.contains(CharPropFlags::READ)
         {
             cmds.push(Line::from(vec![" Read: ".into(), " <r> ".blue().bold()]).centered());
+        } else if let View::Characteristic(ViewState::Idle) = self.view
+            && let Some(characteristic) = self.state.get_indexed_characteristic()
+            && characteristic.properties.contains(CharPropFlags::WRITE)
+        {
+            cmds.push(Line::from(vec![" Write: ".into(), " <w> ".blue().bold()]).centered());
         } else if let View::Characteristic(ViewState::Payload(characteristic_id)) = self.view
             && self
                 .state
