@@ -5,7 +5,7 @@ use services::{
     health::{HEALTH_PING_CHAR_UUID, HEALTH_STATUS_CHAR_UUID, Pong},
     trouble_host::types::gatt_traits::FromGatt,
 };
-use std::pin::Pin;
+use std::{marker::PhantomData, pin::Pin};
 use tokio::{
     select,
     sync::mpsc::{self, Receiver, Sender},
@@ -243,32 +243,33 @@ impl PeripheralsClient {
 }
 
 pub enum KnownCharacteristic {
-    Ping(Pong),
-    Status(bool),
+    Ping(Known<Pong>),
+    Status(Known<bool>),
+    Unknown,
+}
+
+pub struct Known<T> {
+    _marker: PhantomData<T>,
 }
 
 impl KnownCharacteristic {
-    pub fn display_name(&self) -> &str {
-        match &self {
-            KnownCharacteristic::Ping(_) => "HEALTH_PING",
-            KnownCharacteristic::Status(_) => "HEALTH_STATUS",
+    pub fn new(characteristic_id: Uuid) -> Self {
+        if characteristic_id == HEALTH_PING_CHAR_UUID {
+            Self::Ping(Known {
+                _marker: PhantomData,
+            })
+        } else if characteristic_id == HEALTH_STATUS_CHAR_UUID {
+            Self::Status(Known {
+                _marker: PhantomData,
+            })
+        } else {
+            Self::Unknown
         }
     }
 }
 
-pub fn check_known_characteristic(
-    characteristic_id: Uuid,
-    data: &[u8],
-) -> Result<Option<KnownCharacteristic>, String> {
-    if characteristic_id == HEALTH_PING_CHAR_UUID {
-        Ok(Some(KnownCharacteristic::Ping(
-            <Pong as FromGatt>::from_gatt(data).map_err(|e| format!("{e:?}"))?,
-        )))
-    } else if characteristic_id == HEALTH_STATUS_CHAR_UUID {
-        Ok(Some(KnownCharacteristic::Status(
-            <bool as FromGatt>::from_gatt(data).map_err(|e| format!("{e:?}"))?,
-        )))
-    } else {
-        Ok(None)
+impl<T: FromGatt> Known<T> {
+    pub fn to_inner(&self, data: &[u8]) -> Result<T, String> {
+        T::from_gatt(data).map_err(|e| format!("{e:?}"))
     }
 }

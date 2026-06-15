@@ -1,9 +1,6 @@
 use crate::{
     pages::home::{View, ViewState, state::State},
-    utils::{
-        peripherals::{KnownCharacteristic, check_known_characteristic},
-        spinner::Spinner,
-    },
+    utils::{peripherals::KnownCharacteristic, spinner::Spinner},
 };
 use iot_sdk::{CharPropFlags, Uuid};
 use ratatui::{
@@ -68,11 +65,12 @@ impl<'a> DisplayWidget<'a> {
             .unwrap_or(&vec![])
             .iter()
             .map(|c| {
-                let entry = if let Ok(Some(known)) = check_known_characteristic(c.uuid, &[]) {
-                    known.display_name().to_string()
-                } else {
-                    format!("UUID: {}", c.uuid)
+                let entry = match KnownCharacteristic::new(c.uuid) {
+                    KnownCharacteristic::Ping(_) => format!("Ping: {}", c.uuid),
+                    KnownCharacteristic::Status(_) => format!("Status: {}", c.uuid),
+                    KnownCharacteristic::Unknown => format!("UUID: {}", c.uuid),
                 };
+
                 ListItem::new(Line::from(entry).centered())
             })
             .collect::<Vec<ListItem>>();
@@ -169,26 +167,22 @@ impl<'a> DisplayWidget<'a> {
             .split(inner);
         let center_area = layout[1];
 
-        match check_known_characteristic(characteristic_id, response) {
-            Ok(data) => {
-                let text = if let Some(known_characteristic) = data {
-                    match known_characteristic {
-                        KnownCharacteristic::Ping(pong) => Text::from(format!("{pong}")),
-                        KnownCharacteristic::Status(status) => Text::from(format!("{status}")),
-                    }
-                } else {
-                    Text::from(
-                        String::from_utf8(response.to_owned()).unwrap_or(String::from("0.0")),
-                    )
-                };
+        let text = match KnownCharacteristic::new(characteristic_id) {
+            KnownCharacteristic::Ping(pong) => {
+                let pong = pong.to_inner(response).unwrap();
+                Text::from(format!("{pong}"))
+            }
+            KnownCharacteristic::Status(status) => {
+                let status = status.to_inner(response).unwrap();
+                Text::from(format!("{status}"))
+            }
+            KnownCharacteristic::Unknown => Text::from(
+                String::from_utf8(response.to_owned()).unwrap_or(String::from("Unknown Response")),
+            ),
+        };
 
-                let paragraph = Paragraph::new(text).alignment(Alignment::Center);
-                paragraph.render(center_area, buf);
-            }
-            Err(err) => {
-                PopUpErrorWidget::new(err.as_str()).render(area, buf);
-            }
-        }
+        let paragraph = Paragraph::new(text).alignment(Alignment::Center);
+        paragraph.render(center_area, buf);
     }
 
     fn render_mid_area(&self, area: Rect, buf: &mut Buffer) {
