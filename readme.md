@@ -1,2 +1,3 @@
-- figure out how to render based on if iot device is found
-    - add known 
+figure out how to render descriptors
+Set descriptors in iot
+Figure out how to use descriptors on tui 

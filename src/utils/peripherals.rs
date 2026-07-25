@@ -3,6 +3,7 @@ use futures_util::StreamExt;
 use iot_sdk::{Characteristic, Peripheral, PlatformPeripheral, Uuid, central::Central};
 use services::{
     health::{HEALTH_PING_CHAR_UUID, HEALTH_STATUS_CHAR_UUID, Pong},
+    led::LED_STATUS_CHAR_UUID,
     trouble_host::types::gatt_traits::FromGatt,
 };
 use std::{marker::PhantomData, pin::Pin};
@@ -245,6 +246,7 @@ impl PeripheralsClient {
 pub enum KnownCharacteristic {
     Ping(Known<Pong>),
     Status(Known<bool>),
+    Led(Known<u8>),
     Unknown,
 }
 
@@ -260,6 +262,10 @@ impl KnownCharacteristic {
             })
         } else if characteristic_id == HEALTH_STATUS_CHAR_UUID {
             Self::Status(Known {
+                _marker: PhantomData,
+            })
+        } else if characteristic_id == LED_STATUS_CHAR_UUID {
+            Self::Led(Known {
                 _marker: PhantomData,
             })
         } else {

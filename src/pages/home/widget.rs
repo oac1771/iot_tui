@@ -66,9 +66,10 @@ impl<'a> DisplayWidget<'a> {
             .iter()
             .map(|c| {
                 let entry = match KnownCharacteristic::new(c.uuid) {
-                    KnownCharacteristic::Ping(_) => format!("Ping: {}", c.uuid),
-                    KnownCharacteristic::Status(_) => format!("Status: {}", c.uuid),
-                    KnownCharacteristic::Unknown => format!("UUID: {}", c.uuid),
+                    KnownCharacteristic::Ping(_) => format!("Ping: {}, flags: {:?}", c.uuid, c.properties),
+                    KnownCharacteristic::Status(_) => format!("Status: {}, flags: {:?}", c.uuid, c.properties),
+                    KnownCharacteristic::Led(_) => format!("Led: {}, flags: {:?}", c.uuid, c.properties),
+                    KnownCharacteristic::Unknown => format!("UUID: {}, flags: {:?}", c.uuid, c.properties),
                 };
 
                 ListItem::new(Line::from(entry).centered())
@@ -168,14 +169,18 @@ impl<'a> DisplayWidget<'a> {
         let center_area = layout[1];
 
         let text = match KnownCharacteristic::new(characteristic_id) {
-            KnownCharacteristic::Ping(pong) => {
-                let pong = pong.to_inner(response).unwrap();
-                Text::from(format!("{pong}"))
-            }
-            KnownCharacteristic::Status(status) => {
-                let status = status.to_inner(response).unwrap();
-                Text::from(format!("{status}"))
-            }
+            KnownCharacteristic::Ping(pong) => match pong.to_inner(response) {
+                Ok(pong) => Text::from(format!("{pong}")),
+                Err(err) => Text::from(format!("Error constructing pong response {err}")),
+            },
+            KnownCharacteristic::Status(status) => match status.to_inner(response) {
+                Ok(status) => Text::from(format!("{status}")),
+                Err(err) => Text::from(format!("Error constructing status response {err}")),
+            },
+            KnownCharacteristic::Led(led) => match led.to_inner(response) {
+                Ok(led) => Text::from(format!("{led}")),
+                Err(err) => Text::from(format!("Error constructing pong response {err}")),
+            },
             KnownCharacteristic::Unknown => Text::from(
                 String::from_utf8(response.to_owned()).unwrap_or(String::from("Unknown Response")),
             ),

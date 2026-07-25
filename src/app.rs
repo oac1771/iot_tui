@@ -53,7 +53,7 @@ impl App {
 
                 key_event = reader.next() => {
                     if let Some(Ok(CrosstermEvent::Key(key_event))) = key_event {
-                        self.__handle_key_event(&key_event);
+                        self.handle_app_key_event(&key_event);
                         self.handle_key_event(&key_event).await
                     } else {
                         Ok(())
@@ -121,7 +121,7 @@ impl App {
         }
     }
 
-    fn __handle_key_event(&mut self, key_event: &KeyEvent) {
+    fn handle_app_key_event(&mut self, key_event: &KeyEvent) {
         if key_event.kind == KeyEventKind::Press
             && key_event.modifiers == KeyModifiers::CONTROL
             && key_event.code == KeyCode::Char('c')
