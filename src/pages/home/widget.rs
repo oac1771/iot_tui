@@ -66,10 +66,18 @@ impl<'a> DisplayWidget<'a> {
             .iter()
             .map(|c| {
                 let entry = match KnownCharacteristic::new(c.uuid) {
-                    KnownCharacteristic::Ping(_) => format!("Ping: {}, flags: {:?}", c.uuid, c.properties),
-                    KnownCharacteristic::Status(_) => format!("Status: {}, flags: {:?}", c.uuid, c.properties),
-                    KnownCharacteristic::Led(_) => format!("Led: {}, flags: {:?}", c.uuid, c.properties),
-                    KnownCharacteristic::Unknown => format!("UUID: {}, flags: {:?}", c.uuid, c.properties),
+                    KnownCharacteristic::Ping(_) => {
+                        format!("Ping: {}, flags: {:?}", c.uuid, c.properties)
+                    }
+                    KnownCharacteristic::Status(_) => {
+                        format!("Status: {}, flags: {:?}", c.uuid, c.properties)
+                    }
+                    KnownCharacteristic::Storage(_) => {
+                        format!("Storage: {}, flags: {:?}", c.uuid, c.properties)
+                    }
+                    KnownCharacteristic::Unknown => {
+                        format!("UUID: {}, flags: {:?}", c.uuid, c.properties)
+                    }
                 };
 
                 ListItem::new(Line::from(entry).centered())
@@ -177,8 +185,8 @@ impl<'a> DisplayWidget<'a> {
                 Ok(status) => Text::from(format!("{status}")),
                 Err(err) => Text::from(format!("Error constructing status response {err}")),
             },
-            KnownCharacteristic::Led(led) => match led.to_inner(response) {
-                Ok(led) => Text::from(format!("{led}")),
+            KnownCharacteristic::Storage(storage) => match storage.to_inner(response) {
+                Ok(storage) => Text::from(format!("{storage}")),
                 Err(err) => Text::from(format!("Error constructing pong response {err}")),
             },
             KnownCharacteristic::Unknown => Text::from(
