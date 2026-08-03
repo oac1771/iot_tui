@@ -48,10 +48,15 @@ impl State {
         self.characteristic_responses.get(characteristic_id)
     }
 
-    pub async fn update_peripherals(&mut self, peripherals: Vec<PlatformPeripheral>) {
+    pub fn clear_peripheral_local_names(&mut self) {
         self.local_names.clear();
+    }
+
+    pub async fn update_peripherals(&mut self, peripherals: Vec<PlatformPeripheral>) {
         for p in &peripherals {
-            if let Some(local_name) = p.properties().await.unwrap().unwrap().local_name {
+            if let Ok(Some(peripheral_properties)) = p.properties().await
+                && let Some(local_name) = peripheral_properties.local_name
+            {
                 self.local_names.push(local_name)
             }
         }

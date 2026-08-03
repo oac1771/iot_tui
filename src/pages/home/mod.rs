@@ -131,6 +131,7 @@ impl Page for HomePage {
             PeripheralResponse::GetPheripherals(peripherals) => {
                 self.view = View::Peripheral(ViewState::Idle);
                 self.state.clear_characteristics(peripherals.len());
+                self.state.clear_peripheral_local_names();
                 self.state.update_peripherals(peripherals).await;
             }
             PeripheralResponse::PeripheralScanError(err) => {
