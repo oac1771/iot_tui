@@ -1,6 +1,4 @@
-Add timeouts for reading characterisic values
-figure out how to render descriptors
-Set descriptors in iot
-Figure out how to use descriptors on tui 
+need to figure out differnt way to expose write data type
+    - maybe descriptor does work when trying to write (the type thing might cause write to fail)
 
 write to device

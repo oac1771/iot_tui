@@ -333,6 +333,18 @@ impl<'a> DisplayWidget<'a> {
                 ])
                 .centered(),
             );
+        } else if let View::Characteristic(ViewState::Idle) = self.view
+            && let Some(characteristic) = characteristic
+            && characteristic.properties.contains(CharPropFlags::NOTIFY)
+        {
+            cmds.push(Line::from(vec![" Notify: ".into(), " <n> ".blue().bold()]).centered());
+            descriptors.push(
+                Line::from(vec![
+                    " Descriptor: ".into(),
+                    format!("{:?}", characteristic.descriptors).blue().bold(),
+                ])
+                .centered(),
+            );
         } else if let View::Characteristic(ViewState::Payload(characteristic_id)) = self.view
             && self
                 .state
