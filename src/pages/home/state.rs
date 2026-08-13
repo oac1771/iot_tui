@@ -8,6 +8,7 @@ pub struct State {
     peripherals: Vec<PlatformPeripheral>,
     local_names: Vec<String>,
     characteristics: Vec<Vec<Characteristic>>,
+    descriptors: Vec<Vec<u8>>,
     characteristic_responses: HashMap<Uuid, Vec<u8>>,
 }
 
@@ -68,6 +69,10 @@ impl State {
         self.characteristics[self.peripheral_index] = characteristics;
     }
 
+    pub fn update_descriptors(&mut self, descriptors: Vec<u8>) {
+        self.descriptors[self.peripheral_index] = descriptors;
+    }
+
     pub fn clear_characteristics(&mut self, len: usize) {
         self.characteristics = vec![vec![]; len]
     }
@@ -125,6 +130,7 @@ impl Default for State {
             peripherals: Vec::new(),
             local_names: Vec::new(),
             characteristics: vec![vec![]; 1],
+            descriptors: vec![vec![]; 1],
             characteristic_responses: HashMap::new(),
         }
     }

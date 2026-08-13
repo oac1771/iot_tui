@@ -290,9 +290,12 @@ impl<'a> DisplayWidget<'a> {
             .flex(Flex::Center)
             .constraints(vec![Constraint::Percentage(33), Constraint::Percentage(66)]);
 
-        let [view_command_area, _] = layout.areas(area);
+        let [view_command_area, descriptor_area] = layout.areas(area);
 
         let mut cmds = Vec::new();
+        let mut descriptors = Vec::new();
+
+        let characteristic = self.state.get_indexed_characteristic();
 
         if let View::Peripheral(ViewState::Idle) = self.view {
             cmds.push(Line::from(vec![
@@ -307,15 +310,29 @@ impl<'a> DisplayWidget<'a> {
                 );
             }
         } else if let View::Characteristic(ViewState::Idle) = self.view
-            && let Some(characteristic) = self.state.get_indexed_characteristic()
+            && let Some(characteristic) = characteristic
             && characteristic.properties.contains(CharPropFlags::READ)
         {
             cmds.push(Line::from(vec![" Read: ".into(), " <r> ".blue().bold()]).centered());
+            descriptors.push(
+                Line::from(vec![
+                    " Descriptor: ".into(),
+                    format!("{:?}", characteristic.descriptors).blue().bold(),
+                ])
+                .centered(),
+            );
         } else if let View::Characteristic(ViewState::Idle) = self.view
-            && let Some(characteristic) = self.state.get_indexed_characteristic()
+            && let Some(characteristic) = characteristic
             && characteristic.properties.contains(CharPropFlags::WRITE)
         {
             cmds.push(Line::from(vec![" Write: ".into(), " <w> ".blue().bold()]).centered());
+            descriptors.push(
+                Line::from(vec![
+                    " Descriptor: ".into(),
+                    format!("{:?}", characteristic.descriptors).blue().bold(),
+                ])
+                .centered(),
+            );
         } else if let View::Characteristic(ViewState::Payload(characteristic_id)) = self.view
             && self
                 .state
@@ -332,10 +349,15 @@ impl<'a> DisplayWidget<'a> {
         }
 
         let view_specific_cmds = Text::from(cmds);
+        let view_descriptors = Text::from(descriptors);
 
         Paragraph::new(view_specific_cmds.centered())
             .centered()
             .render(view_command_area, buf);
+
+        Paragraph::new(view_descriptors.centered())
+            .centered()
+            .render(descriptor_area, buf);
     }
 }
 

@@ -140,6 +140,15 @@ impl Peripherals {
                 .cloned()
                 .collect::<Vec<Characteristic>>();
 
+            for characteristic in characteristics.iter() {
+                for descriptor in characteristic.descriptors.iter() {
+                    select! {
+                        result = peripheral.read_descriptor(descriptor) => result.map_err(|e| e.to_string()),
+                        _ = sleep(Duration::from_secs(5)) => Err("Timed out reading characteristic descriptor".to_string())
+                    }?;
+                }
+            }
+
             let response = PeripheralResponse::GetCharacteristics(characteristics);
             tx.send(response).await.map_err(|e| e.to_string())?;
 
@@ -185,10 +194,10 @@ impl Peripherals {
                 .await
                 .map_err(|e| e.to_string())?;
 
-            let result = central
-                .read(&peripheral, characteristic_uuid)
-                .await
-                .map_err(|e| e.to_string())?;
+            let result = select! {
+                result = central.read(&peripheral, characteristic_uuid) => result.map_err(|e| e.to_string()),
+                _ = sleep(Duration::from_secs(5)) => Err("Timed out reading characteristic value".to_string())
+            }?;
 
             let response = PeripheralResponse::ReadCharacteristic((characteristic_uuid, result));
             tx.send(response).await.map_err(|e| e.to_string())?;

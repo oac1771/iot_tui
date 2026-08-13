@@ -1,2 +1,4 @@
 /target
 .mise.toml
+
+input_example.rs
