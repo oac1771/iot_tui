@@ -140,6 +140,18 @@ impl Peripherals {
                 .cloned()
                 .collect::<Vec<Characteristic>>();
 
+            for characteristic in characteristics.iter() {
+                for descriptor in characteristic.descriptors.iter() {
+                    let foo = select! {
+                        result = peripheral.read_descriptor(descriptor) => result.map_err(|e| e.to_string()),
+                        _ = sleep(Duration::from_secs(5)) => Err("Timed out reading characteristic descriptor".to_string())
+                    }?;
+                    if let Ok(d) = u8::from_gatt(&foo) {
+                        println!("{:?}", d)
+                    }
+                }
+            }
+
             let response = PeripheralResponse::GetCharacteristics(characteristics);
             tx.send(response).await.map_err(|e| e.to_string())?;
 
