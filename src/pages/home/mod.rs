@@ -81,17 +81,17 @@ impl Page for HomePage {
                     KeyCode::Left => self.view = View::Peripheral(ViewState::Idle),
                     KeyCode::Char('r') => {
                         if let Some(characteristic) = self.state.get_indexed_characteristic()
-                            && characteristic.properties.contains(CharPropFlags::READ)
+                            && characteristic.properties().contains(CharPropFlags::READ)
                         {
                             let peripheral = self.state.get_indexed_peripheral();
                             self.peripherals_client
-                                .read(peripheral.clone(), characteristic.uuid)
+                                .read(peripheral.clone(), characteristic)
                                 .await?;
                         }
                     }
                     KeyCode::Char('w') => {
                         if let Some(characteristic) = self.state.get_indexed_characteristic()
-                            && characteristic.properties.contains(CharPropFlags::WRITE)
+                            && characteristic.properties().contains(CharPropFlags::WRITE)
                         {
                             println!("Sending write!")
                             // change view State to editing
@@ -168,10 +168,11 @@ impl Page for HomePage {
                     String::from("Sending Read Request..."),
                 )))
             }
-            PeripheralResponse::ReadCharacteristic((characteristic_id, response)) => {
+            PeripheralResponse::ReadCharacteristic((characteristic, response)) => {
+                let characteristic_id = characteristic.id();
                 self.view = View::Characteristic(ViewState::Payload(characteristic_id));
                 self.state
-                    .update_characteristic_response(characteristic_id, response);
+                    .update_characteristic_response(characteristic, response);
             }
         };
         Ok(())

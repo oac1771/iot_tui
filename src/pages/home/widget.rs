@@ -2,13 +2,13 @@ use crate::{
     pages::home::{View, ViewState, state::State},
     utils::{peripherals::KnownCharacteristic, spinner::Spinner},
 };
-use iot_sdk::{CharPropFlags, Uuid};
+use iot_sdk::CharPropFlags;
 use ratatui::{
     buffer::Buffer,
     layout::{Alignment, Constraint, Direction, Flex, Layout, Rect},
     style::{Style, Stylize},
     symbols::border,
-    text::{Line, Text},
+    text::{Line, Span, Text},
     widgets::{Block, Clear, List, ListItem, ListState, Paragraph, StatefulWidget, Widget, Wrap},
 };
 
@@ -64,23 +64,10 @@ impl<'a> DisplayWidget<'a> {
             .get_characteristics()
             .unwrap_or(&vec![])
             .iter()
-            .map(|c| {
-                let entry = match KnownCharacteristic::new(c.uuid) {
-                    KnownCharacteristic::Ping(_) => {
-                        format!("Ping: {}, flags: {:?}", c.uuid, c.properties)
-                    }
-                    KnownCharacteristic::Status(_) => {
-                        format!("Status: {}, flags: {:?}", c.uuid, c.properties)
-                    }
-                    KnownCharacteristic::Storage(_) => {
-                        format!("Storage: {}, flags: {:?}", c.uuid, c.properties)
-                    }
-                    KnownCharacteristic::Unknown => {
-                        format!("UUID: {}, flags: {:?}", c.uuid, c.properties)
-                    }
-                };
-
-                ListItem::new(Line::from(entry).centered())
+            .map(|characteristic| {
+                ListItem::new(
+                    Line::from(characteristic.display_characteristic_properties()).centered(),
+                )
             })
             .collect::<Vec<ListItem>>();
 
@@ -163,7 +150,7 @@ impl<'a> DisplayWidget<'a> {
         buf: &mut Buffer,
         block: &Block,
         response: &[u8],
-        characteristic_id: Uuid,
+        characteristic: KnownCharacteristic,
     ) {
         let inner = block.inner(area);
         let layout = Layout::default()
@@ -176,22 +163,9 @@ impl<'a> DisplayWidget<'a> {
             .split(inner);
         let center_area = layout[1];
 
-        let text = match KnownCharacteristic::new(characteristic_id) {
-            KnownCharacteristic::Ping(pong) => match pong.to_inner(response) {
-                Ok(pong) => Text::from(format!("{pong}")),
-                Err(err) => Text::from(format!("Error constructing pong response {err}")),
-            },
-            KnownCharacteristic::Status(status) => match status.to_inner(response) {
-                Ok(status) => Text::from(format!("{status}")),
-                Err(err) => Text::from(format!("Error constructing status response {err}")),
-            },
-            KnownCharacteristic::Storage(storage) => match storage.to_inner(response) {
-                Ok(storage) => Text::from(format!("{storage}")),
-                Err(err) => Text::from(format!("Error constructing pong response {err}")),
-            },
-            KnownCharacteristic::Unknown => Text::from(
-                String::from_utf8(response.to_owned()).unwrap_or(String::from("Unknown Response")),
-            ),
+        let text = match characteristic.to_inner_string(response) {
+            Ok(response) => Text::from(response),
+            Err(err) => Text::from(err),
         };
 
         let paragraph = Paragraph::new(text).alignment(Alignment::Center);
@@ -233,13 +207,17 @@ impl<'a> DisplayWidget<'a> {
                 scanning_message,
             )
         } else if let View::Characteristic(ViewState::Payload(characteristic_id)) = self.view {
-            if let Some(response) = self.state.get_characteristic_response(characteristic_id) {
+            let characteristic = self
+                .state
+                .get_characteristic(characteristic_id)
+                .expect("fOOOOO");
+            if let Some(response) = self.state.get_characteristic_response(&characteristic_id) {
                 self.render_characteristic_response(
                     right_area,
                     buf,
                     &characteristic_block,
-                    response,
-                    *characteristic_id,
+                    response.data(),
+                    characteristic.clone(),
                 );
             }
         } else if self.state.get_characteristics().is_some() {
@@ -293,9 +271,6 @@ impl<'a> DisplayWidget<'a> {
         let [view_command_area, descriptor_area] = layout.areas(area);
 
         let mut cmds = Vec::new();
-        let mut descriptors = Vec::new();
-
-        let characteristic = self.state.get_indexed_characteristic();
 
         if let View::Peripheral(ViewState::Idle) = self.view {
             cmds.push(Line::from(vec![
@@ -309,67 +284,52 @@ impl<'a> DisplayWidget<'a> {
                         .centered(),
                 );
             }
-        } else if let View::Characteristic(ViewState::Idle) = self.view
-            && let Some(characteristic) = characteristic
-            && characteristic.properties.contains(CharPropFlags::READ)
-        {
-            cmds.push(Line::from(vec![" Read: ".into(), " <r> ".blue().bold()]).centered());
-            descriptors.push(
-                Line::from(vec![
-                    " Descriptor: ".into(),
-                    format!("{:?}", characteristic.descriptors).blue().bold(),
-                ])
-                .centered(),
-            );
-        } else if let View::Characteristic(ViewState::Idle) = self.view
-            && let Some(characteristic) = characteristic
-            && characteristic.properties.contains(CharPropFlags::WRITE)
-        {
-            cmds.push(Line::from(vec![" Write: ".into(), " <w> ".blue().bold()]).centered());
-            descriptors.push(
-                Line::from(vec![
-                    " Descriptor: ".into(),
-                    format!("{:?}", characteristic.descriptors).blue().bold(),
-                ])
-                .centered(),
-            );
-        } else if let View::Characteristic(ViewState::Idle) = self.view
-            && let Some(characteristic) = characteristic
-            && characteristic.properties.contains(CharPropFlags::NOTIFY)
-        {
-            cmds.push(Line::from(vec![" Notify: ".into(), " <n> ".blue().bold()]).centered());
-            descriptors.push(
-                Line::from(vec![
-                    " Descriptor: ".into(),
-                    format!("{:?}", characteristic.descriptors).blue().bold(),
-                ])
-                .centered(),
-            );
-        } else if let View::Characteristic(ViewState::Payload(characteristic_id)) = self.view
-            && self
-                .state
-                .get_characteristic_response(characteristic_id)
-                .is_some()
-        {
-            cmds.push(
-                Line::from(vec![
-                    " Go back to Characteristic View: ".into(),
-                    " <Esc> ".blue().bold(),
-                ])
-                .centered(),
-            );
+        } else if let Some(characteristic) = self.state.get_indexed_characteristic() {
+            let descriptors = Line::from(
+                characteristic
+                    .descriptors()
+                    .map(|d| Span::raw(d.metadata()))
+                    .collect::<Vec<Span>>(),
+            )
+            .centered();
+            let view_descriptors = Text::from(descriptors);
+            Paragraph::new(view_descriptors.centered())
+                .centered()
+                .render(descriptor_area, buf);
+
+            if let View::Characteristic(ViewState::Idle) = self.view
+                && characteristic.properties().contains(CharPropFlags::READ)
+            {
+                cmds.push(Line::from(vec![" Read: ".into(), " <r> ".blue().bold()]).centered());
+            } else if let View::Characteristic(ViewState::Idle) = self.view
+                && characteristic.properties().contains(CharPropFlags::WRITE)
+            {
+                cmds.push(Line::from(vec![" Write: ".into(), " <w> ".blue().bold()]).centered());
+            } else if let View::Characteristic(ViewState::Idle) = self.view
+                && characteristic.properties().contains(CharPropFlags::NOTIFY)
+            {
+                cmds.push(Line::from(vec![" Notify: ".into(), " <n> ".blue().bold()]).centered());
+            } else if let View::Characteristic(ViewState::Payload(characteristic_id)) = self.view
+                && self
+                    .state
+                    .get_characteristic_response(characteristic_id)
+                    .is_some()
+            {
+                cmds.push(
+                    Line::from(vec![
+                        " Go back to Characteristic View: ".into(),
+                        " <Esc> ".blue().bold(),
+                    ])
+                    .centered(),
+                );
+            }
         }
 
         let view_specific_cmds = Text::from(cmds);
-        let view_descriptors = Text::from(descriptors);
 
         Paragraph::new(view_specific_cmds.centered())
             .centered()
             .render(view_command_area, buf);
-
-        Paragraph::new(view_descriptors.centered())
-            .centered()
-            .render(descriptor_area, buf);
     }
 }
 

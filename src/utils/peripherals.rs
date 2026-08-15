@@ -1,12 +1,14 @@
 use futures::FutureExt;
 use futures_util::StreamExt;
-use iot_sdk::{Characteristic, Peripheral, PlatformPeripheral, Uuid, central::Central};
-use services::{
-    health::{HEALTH_PING_CHAR_UUID, HEALTH_STATUS_CHAR_UUID, Pong},
-    storage::STORAGE_STATUS_CHAR_UUID,
-    trouble_host::types::gatt_traits::FromGatt,
+use iot_sdk::{
+    CharPropFlags, Characteristic, Peripheral, PlatformPeripheral, Uuid, central::Central,
 };
-use std::{marker::PhantomData, pin::Pin};
+use services::{
+    Foo,
+    health::{HealthServicePingDescriptor, HealthServiceStatusDescriptor},
+    trouble_host::types::gatt_traits::{AsGatt, FromGatt, FromGattError},
+};
+use std::pin::Pin;
 use tokio::{
     select,
     sync::mpsc::{self, Receiver, Sender},
@@ -43,7 +45,7 @@ pub struct PeripheralsClient(Sender<PeripheralRequest>);
 pub enum PeripheralRequest {
     GetPheripherals,
     GetCharacteristics(PlatformPeripheral),
-    Read((PlatformPeripheral, Uuid)),
+    Read((PlatformPeripheral, KnownCharacteristic)),
 }
 
 #[derive(Debug)]
@@ -53,10 +55,10 @@ pub enum PeripheralResponse {
     PeripheralScanError(String),
     CharacteristicScanStarted,
     ScanningMessageUpdate(String),
-    GetCharacteristics(Vec<Characteristic>),
+    GetCharacteristics(Vec<KnownCharacteristic>),
     CharacteristicScanError(String),
     ReadCharacteristicCallStarted,
-    ReadCharacteristic((Uuid, Vec<u8>)),
+    ReadCharacteristic((KnownCharacteristic, Vec<u8>)),
 }
 
 impl Peripherals {
@@ -79,8 +81,8 @@ impl Peripherals {
                 PeripheralRequest::GetCharacteristics(peripheral) => {
                     Self::get_characteristics(tx, peripheral).boxed()
                 }
-                PeripheralRequest::Read((peripheral, characteristic_uuid)) => {
-                    Self::read_characteristic(central, tx, peripheral, characteristic_uuid).boxed()
+                PeripheralRequest::Read((peripheral, characteristic)) => {
+                    Self::read_characteristic(central, tx, peripheral, characteristic).boxed()
                 }
             };
 
@@ -134,25 +136,25 @@ impl Peripherals {
 
             Self::connect_to_peripheral(&peripheral, &tx).await?;
 
-            let characteristics = peripheral
-                .characteristics()
-                .iter()
-                .cloned()
-                .collect::<Vec<Characteristic>>();
+            let mut known_characteristics = Vec::new();
 
-            for characteristic in characteristics.iter() {
+            for characteristic in peripheral.characteristics().into_iter() {
+                let mut raw_descriptors = Vec::new();
+
                 for descriptor in characteristic.descriptors.iter() {
-                    let foo = select! {
+                    let raw_descriptor = select! {
                         result = peripheral.read_descriptor(descriptor) => result.map_err(|e| e.to_string()),
                         _ = sleep(Duration::from_secs(5)) => Err("Timed out reading characteristic descriptor".to_string())
                     }?;
-                    if let Ok(d) = u8::from_gatt(&foo) {
-                        println!("{:?}", d)
-                    }
+
+                    raw_descriptors.push(raw_descriptor);
                 }
+
+                let known_characteristic = KnownCharacteristic::new(characteristic, raw_descriptors.into_iter());
+                known_characteristics.push(known_characteristic)
             }
 
-            let response = PeripheralResponse::GetCharacteristics(characteristics);
+            let response = PeripheralResponse::GetCharacteristics(known_characteristics);
             tx.send(response).await.map_err(|e| e.to_string())?;
 
             Ok(())
@@ -190,7 +192,7 @@ impl Peripherals {
         central: Central,
         tx: Sender<PeripheralResponse>,
         peripheral: PlatformPeripheral,
-        characteristic_uuid: Uuid,
+        characteristic: KnownCharacteristic,
     ) -> Result<(), String> {
         let result = async {
             tx.send(PeripheralResponse::ReadCharacteristicCallStarted)
@@ -198,11 +200,11 @@ impl Peripherals {
                 .map_err(|e| e.to_string())?;
 
             let result = select! {
-                result = central.read(&peripheral, characteristic_uuid) => result.map_err(|e| e.to_string()),
+                result = central.read(&peripheral, characteristic.id()) => result.map_err(|e| e.to_string()),
                 _ = sleep(Duration::from_secs(5)) => Err("Timed out reading characteristic value".to_string())
             }?;
 
-            let response = PeripheralResponse::ReadCharacteristic((characteristic_uuid, result));
+            let response = PeripheralResponse::ReadCharacteristic((characteristic, result));
             tx.send(response).await.map_err(|e| e.to_string())?;
 
             Ok(())
@@ -241,9 +243,9 @@ impl PeripheralsClient {
     pub async fn read(
         &self,
         peripheral: PlatformPeripheral,
-        characteristic_uuid: Uuid,
+        characteristic: &KnownCharacteristic,
     ) -> Result<(), String> {
-        let request = PeripheralRequest::Read((peripheral, characteristic_uuid));
+        let request = PeripheralRequest::Read((peripheral, characteristic.clone()));
         self.send_request(request).await?;
         Ok(())
     }
@@ -255,39 +257,98 @@ impl PeripheralsClient {
     }
 }
 
-pub enum KnownCharacteristic {
-    Ping(Known<Pong>),
-    Status(Known<bool>),
-    Storage(Known<u8>),
-    Unknown,
-}
-
-pub struct Known<T> {
-    _marker: PhantomData<T>,
+#[derive(Debug, Clone)]
+pub struct KnownCharacteristic {
+    characteristic: Characteristic,
+    descriptors: Vec<KnownDescriptor>,
 }
 
 impl KnownCharacteristic {
-    pub fn new(characteristic_id: Uuid) -> Self {
-        if characteristic_id == HEALTH_PING_CHAR_UUID {
-            Self::Ping(Known {
-                _marker: PhantomData,
-            })
-        } else if characteristic_id == HEALTH_STATUS_CHAR_UUID {
-            Self::Status(Known {
-                _marker: PhantomData,
-            })
-        } else if characteristic_id == STORAGE_STATUS_CHAR_UUID {
-            Self::Storage(Known {
-                _marker: PhantomData,
-            })
-        } else {
-            Self::Unknown
+    pub fn new(characteristic: Characteristic, descriptors: impl Iterator<Item = Vec<u8>>) -> Self {
+        let descriptors = descriptors
+            .map(|descriptor_data| KnownDescriptor::from_gatt(&descriptor_data).unwrap())
+            .collect();
+
+        Self {
+            characteristic,
+            descriptors,
+        }
+    }
+
+    pub fn characteristic(&self) -> &Characteristic {
+        &self.characteristic
+    }
+
+    pub fn descriptors(&self) -> impl Iterator<Item = &KnownDescriptor> {
+        self.descriptors.iter()
+    }
+
+    pub fn properties(&self) -> &CharPropFlags {
+        &self.characteristic.properties
+    }
+
+    pub fn id(&self) -> Uuid {
+        self.characteristic.uuid
+    }
+
+    pub fn to_inner_string(&self, data: &[u8]) -> Result<String, String> {
+        for d in self.descriptors.iter() {
+            match d {
+                KnownDescriptor::Ping(p) => {
+                    let foo = Foo::deserialize_response(p, data).map_err(|e| format!("{:?}", e))?;
+                    return Ok(foo.to_string());
+                }
+                KnownDescriptor::Status(p) => {
+                    let foo = Foo::deserialize_response(p, data).map_err(|e| format!("{:?}", e))?;
+                    return Ok(foo.to_string());
+                }
+                KnownDescriptor::Unknown => {
+                    return String::from_utf8(data.to_vec()).map_err(|e| format!("{:?}", e));
+                }
+            }
+        }
+        Ok(String::new())
+    }
+
+    pub fn display_characteristic_properties(&self) -> String {
+        String::from("todo!")
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum KnownDescriptor {
+    Status(HealthServiceStatusDescriptor),
+    Ping(HealthServicePingDescriptor),
+    Unknown,
+}
+
+impl KnownDescriptor {
+    pub fn metadata(&self) -> String {
+        match self {
+            KnownDescriptor::Ping(_) => String::from("Ping Descrptor"),
+            KnownDescriptor::Status(_) => String::from("Status Descrptor"),
+            KnownDescriptor::Unknown => String::from("Unknown Descrptor"),
         }
     }
 }
 
-impl<T: FromGatt> Known<T> {
-    pub fn to_inner(&self, data: &[u8]) -> Result<T, String> {
-        T::from_gatt(data).map_err(|e| format!("{e:?}"))
+impl FromGatt for KnownDescriptor {
+    fn from_gatt(data: &[u8]) -> Result<Self, FromGattError> {
+        if HealthServiceStatusDescriptor::from_gatt(data).is_ok() {
+            Ok(KnownDescriptor::Status(HealthServiceStatusDescriptor))
+        } else if HealthServicePingDescriptor::from_gatt(data).is_ok() {
+            Ok(KnownDescriptor::Ping(HealthServicePingDescriptor))
+        } else {
+            Ok(KnownDescriptor::Unknown)
+        }
+    }
+}
+
+impl AsGatt for KnownDescriptor {
+    const MIN_SIZE: usize = core::mem::size_of::<usize>();
+    const MAX_SIZE: usize = core::mem::size_of::<usize>();
+
+    fn as_gatt(&self) -> &[u8] {
+        &[]
     }
 }

@@ -1,5 +1,7 @@
-use iot_sdk::{Characteristic, Peripheral, PlatformPeripheral, Uuid};
-use std::collections::HashMap;
+use iot_sdk::{Peripheral, PlatformPeripheral, Uuid};
+use std::collections::{BTreeMap, HashMap};
+
+use crate::utils::peripherals::KnownCharacteristic;
 
 #[derive(Debug)]
 pub struct State {
@@ -7,11 +9,13 @@ pub struct State {
     characteristic_index: usize,
     peripherals: Vec<PlatformPeripheral>,
     local_names: Vec<String>,
-    characteristics: Vec<Vec<Characteristic>>,
-    characteristic_responses: HashMap<Uuid, Vec<u8>>,
+    characteristics: Vec<Vec<KnownCharacteristic>>,
+    characteristic_responses: HashMap<Uuid, CharacteristicResponse>,
+    characteristic_map: BTreeMap<Uuid, KnownCharacteristic>,
 }
 
 impl State {
+    // This function cannot be async, its used in rendering which cant do async
     pub fn get_local_names(&self) -> &Vec<String> {
         &self.local_names
     }
@@ -20,7 +24,7 @@ impl State {
         &self.peripherals[self.peripheral_index]
     }
 
-    pub fn get_indexed_characteristic(&self) -> Option<&Characteristic> {
+    pub fn get_indexed_characteristic(&self) -> Option<&KnownCharacteristic> {
         if let Some(characteristic) = self.get_characteristics() {
             Some(&characteristic[self.characteristic_index])
         } else {
@@ -28,7 +32,7 @@ impl State {
         }
     }
 
-    pub fn get_characteristics(&self) -> Option<&Vec<Characteristic>> {
+    pub fn get_characteristics(&self) -> Option<&Vec<KnownCharacteristic>> {
         if self.characteristics[self.peripheral_index].is_empty() {
             None
         } else {
@@ -44,7 +48,14 @@ impl State {
         self.characteristic_index
     }
 
-    pub fn get_characteristic_response(&self, characteristic_id: &Uuid) -> Option<&Vec<u8>> {
+    pub fn get_characteristic(&self, characteristic_id: &Uuid) -> Option<&KnownCharacteristic> {
+        self.characteristic_map.get(characteristic_id)
+    }
+
+    pub fn get_characteristic_response(
+        &self,
+        characteristic_id: &Uuid,
+    ) -> Option<&CharacteristicResponse> {
         self.characteristic_responses.get(characteristic_id)
     }
 
@@ -64,7 +75,7 @@ impl State {
         self.peripherals = peripherals
     }
 
-    pub fn update_characteristics(&mut self, characteristics: Vec<Characteristic>) {
+    pub fn update_characteristics(&mut self, characteristics: Vec<KnownCharacteristic>) {
         self.characteristics[self.peripheral_index] = characteristics;
     }
 
@@ -107,9 +118,15 @@ impl State {
         self.characteristic_index = index;
     }
 
-    pub fn update_characteristic_response(&mut self, characteristic_id: Uuid, response: Vec<u8>) {
+    pub fn update_characteristic_response(
+        &mut self,
+        characteristic: KnownCharacteristic,
+        response: Vec<u8>,
+    ) {
+        let characteristic_id = characteristic.id();
+        let characteristic_response = CharacteristicResponse::new(response, characteristic);
         self.characteristic_responses
-            .insert(characteristic_id, response);
+            .insert(characteristic_id, characteristic_response);
     }
 }
 
@@ -126,6 +143,26 @@ impl Default for State {
             local_names: Vec::new(),
             characteristics: vec![vec![]; 1],
             characteristic_responses: HashMap::new(),
+            characteristic_map: BTreeMap::new(),
         }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct CharacteristicResponse {
+    raw_data: Vec<u8>,
+    characteristic: KnownCharacteristic,
+}
+
+impl CharacteristicResponse {
+    pub fn new(raw_data: Vec<u8>, characteristic: KnownCharacteristic) -> Self {
+        Self {
+            raw_data,
+            characteristic,
+        }
+    }
+
+    pub fn data(&self) -> &[u8] {
+        &self.raw_data
     }
 }
