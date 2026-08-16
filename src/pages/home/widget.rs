@@ -151,7 +151,7 @@ impl<'a> DisplayWidget<'a> {
         block: &Block,
         response: &[u8],
         characteristic: &KnownCharacteristic,
-    ) {
+    ) -> Result<(), String> {
         let inner = block.inner(area);
         let layout = Layout::default()
             .direction(Direction::Vertical)
@@ -163,13 +163,15 @@ impl<'a> DisplayWidget<'a> {
             .split(inner);
         let center_area = layout[1];
 
-        let text = match characteristic.to_inner_string(response) {
-            Ok(response) => Text::from(response),
-            Err(err) => Text::from(err),
-        };
-
-        let paragraph = Paragraph::new(text).alignment(Alignment::Center);
-        paragraph.render(center_area, buf);
+        match characteristic.to_inner_string(response) {
+            Ok(response) => {
+                let text = Text::from(response);
+                let paragraph = Paragraph::new(text).alignment(Alignment::Center);
+                paragraph.render(center_area, buf);
+                Ok(())
+            }
+            Err(err) => Err(err),
+        }
     }
 
     fn render_mid_area(&self, area: Rect, buf: &mut Buffer) {
@@ -210,13 +212,16 @@ impl<'a> DisplayWidget<'a> {
             if let Some(characteristic) = self.state.get_characteristic(characteristic_id)
                 && let Some(response) = self.state.get_characteristic_response(&characteristic_id)
             {
-                self.render_characteristic_response(
+                if let Err(err) = self.render_characteristic_response(
                     right_area,
                     buf,
                     &characteristic_block,
                     response.data(),
                     characteristic,
-                );
+                ) {
+                    let error = PopUpErrorWidget::new(&err);
+                    error.render(right_area, buf);
+                }
             }
         } else if self.state.get_characteristics().is_some() {
             self.render_characteristics(right_area, buf, &characteristic_block)

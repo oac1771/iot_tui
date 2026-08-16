@@ -311,19 +311,16 @@ impl KnownCharacteristic {
     }
 
     pub fn to_inner_string(&self, data: &[u8]) -> Result<String, String> {
-        // match self characteristic type with espected descriptor response handler or unknown -> unknown
         match self.characteristic_type {
-            CharacteristicType::Ping => {}
-            CharacteristicType::Status => {}
-            CharacteristicType::Storage => {
-                let foo = self.descriptors().map(|d| {});
-            }
+            CharacteristicType::Ping => Ok(String::from("foo bar")),
+            CharacteristicType::Status => Ok(String::from("foo bar")),
+            CharacteristicType::Storage => Ok(String::from("foo bar")),
             CharacteristicType::Unknown => {
-                return Ok(String::from_utf8(data.to_vec())
-                    .unwrap_or(String::from("Unable to deserialize")));
+                let inner = String::from_utf8(data.to_vec())
+                    .map_err(|_| String::from(format!("Unable to deserialize: {:?}", data)))?;
+                return Ok(inner);
             }
         }
-        Ok(String::from("foo bar"))
     }
 
     pub fn display_characteristic_properties(&self) -> String {
