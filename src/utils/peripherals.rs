@@ -5,7 +5,11 @@ use iot_sdk::{
 };
 use services::{
     Foo,
-    health::{HealthServicePingDescriptor, HealthServiceStatusDescriptor},
+    health::{
+        HEALTH_PING_CHAR_UUID, HEALTH_STATUS_CHAR_UUID, HealthServicePingDescriptor,
+        HealthServiceStatusDescriptor,
+    },
+    storage::STORAGE_STATUS_CHAR_UUID,
     trouble_host::types::gatt_traits::{AsGatt, FromGatt, FromGattError},
 };
 use std::pin::Pin;
@@ -261,6 +265,15 @@ impl PeripheralsClient {
 pub struct KnownCharacteristic {
     characteristic: Characteristic,
     descriptors: Vec<KnownDescriptor>,
+    characteristic_type: CharacteristicType,
+}
+
+#[derive(Debug, Clone)]
+enum CharacteristicType {
+    Ping,
+    Status,
+    Storage,
+    Unknown,
 }
 
 impl KnownCharacteristic {
@@ -269,14 +282,21 @@ impl KnownCharacteristic {
             .map(|descriptor_data| KnownDescriptor::from_gatt(&descriptor_data).unwrap())
             .collect();
 
+        let characteristic_type = if characteristic.uuid == HEALTH_STATUS_CHAR_UUID {
+            CharacteristicType::Status
+        } else if characteristic.uuid == HEALTH_PING_CHAR_UUID {
+            CharacteristicType::Ping
+        } else if characteristic.uuid == STORAGE_STATUS_CHAR_UUID {
+            CharacteristicType::Storage
+        } else {
+            CharacteristicType::Unknown
+        };
+
         Self {
             characteristic,
             descriptors,
+            characteristic_type,
         }
-    }
-
-    pub fn characteristic(&self) -> &Characteristic {
-        &self.characteristic
     }
 
     pub fn descriptors(&self) -> impl Iterator<Item = &KnownDescriptor> {
@@ -311,7 +331,14 @@ impl KnownCharacteristic {
     }
 
     pub fn display_characteristic_properties(&self) -> String {
-        String::from("todo!")
+        match self.characteristic_type {
+            CharacteristicType::Ping => format!("Ping: {}, {:?}", self.id(), self.properties()),
+            CharacteristicType::Status => format!("Status: {}, {:?}", self.id(), self.properties()),
+            CharacteristicType::Storage => {
+                format!("Storage: {}, {:?}", self.id(), self.properties())
+            }
+            CharacteristicType::Unknown => format!("ID: {}, {:?}", self.id(), self.properties()),
+        }
     }
 }
 

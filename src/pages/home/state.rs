@@ -124,7 +124,7 @@ impl State {
         response: Vec<u8>,
     ) {
         let characteristic_id = characteristic.id();
-        let characteristic_response = CharacteristicResponse::new(response, characteristic);
+        let characteristic_response = CharacteristicResponse::new(response);
         self.characteristic_responses
             .insert(characteristic_id, characteristic_response);
     }
@@ -151,15 +151,11 @@ impl Default for State {
 #[derive(Debug, Clone)]
 pub struct CharacteristicResponse {
     raw_data: Vec<u8>,
-    characteristic: KnownCharacteristic,
 }
 
 impl CharacteristicResponse {
-    pub fn new(raw_data: Vec<u8>, characteristic: KnownCharacteristic) -> Self {
-        Self {
-            raw_data,
-            characteristic,
-        }
+    pub fn new(raw_data: Vec<u8>) -> Self {
+        Self { raw_data }
     }
 
     pub fn data(&self) -> &[u8] {
