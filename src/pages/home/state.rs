@@ -76,6 +76,9 @@ impl State {
     }
 
     pub fn update_characteristics(&mut self, characteristics: Vec<KnownCharacteristic>) {
+        characteristics.iter().for_each(|c| {
+            self.characteristic_map.insert(c.id(), c.clone());
+        });
         self.characteristics[self.peripheral_index] = characteristics;
     }
 

@@ -4,7 +4,6 @@ use iot_sdk::{
     CharPropFlags, Characteristic, Peripheral, PlatformPeripheral, Uuid, central::Central,
 };
 use services::{
-    Foo,
     health::{
         HEALTH_PING_CHAR_UUID, HEALTH_STATUS_CHAR_UUID, HealthServicePingDescriptor,
         HealthServiceStatusDescriptor,
@@ -312,22 +311,19 @@ impl KnownCharacteristic {
     }
 
     pub fn to_inner_string(&self, data: &[u8]) -> Result<String, String> {
-        for d in self.descriptors.iter() {
-            match d {
-                KnownDescriptor::Ping(p) => {
-                    let foo = Foo::deserialize_response(p, data).map_err(|e| format!("{:?}", e))?;
-                    return Ok(foo.to_string());
-                }
-                KnownDescriptor::Status(p) => {
-                    let foo = Foo::deserialize_response(p, data).map_err(|e| format!("{:?}", e))?;
-                    return Ok(foo.to_string());
-                }
-                KnownDescriptor::Unknown => {
-                    return String::from_utf8(data.to_vec()).map_err(|e| format!("{:?}", e));
-                }
+        // match self characteristic type with espected descriptor response handler or unknown -> unknown
+        match self.characteristic_type {
+            CharacteristicType::Ping => {}
+            CharacteristicType::Status => {}
+            CharacteristicType::Storage => {
+                let foo = self.descriptors().map(|d| {});
+            }
+            CharacteristicType::Unknown => {
+                return Ok(String::from_utf8(data.to_vec())
+                    .unwrap_or(String::from("Unable to deserialize")));
             }
         }
-        Ok(String::new())
+        Ok(String::from("foo bar"))
     }
 
     pub fn display_characteristic_properties(&self) -> String {
@@ -346,27 +342,31 @@ impl KnownCharacteristic {
 pub enum KnownDescriptor {
     Status(HealthServiceStatusDescriptor),
     Ping(HealthServicePingDescriptor),
-    Unknown,
+    Unknown(Vec<u8>),
 }
 
 impl KnownDescriptor {
     pub fn metadata(&self) -> String {
         match self {
-            KnownDescriptor::Ping(_) => String::from("Ping Descrptor"),
-            KnownDescriptor::Status(_) => String::from("Status Descrptor"),
-            KnownDescriptor::Unknown => String::from("Unknown Descrptor"),
+            KnownDescriptor::Ping(_) => String::from("Ping"),
+            KnownDescriptor::Status(_) => String::from("Status"),
+            KnownDescriptor::Unknown(d) => {
+                String::from_utf8(d.to_vec()).unwrap_or(String::from(""))
+            }
         }
     }
 }
 
 impl FromGatt for KnownDescriptor {
     fn from_gatt(data: &[u8]) -> Result<Self, FromGattError> {
-        if HealthServiceStatusDescriptor::from_gatt(data).is_ok() {
+        if data.is_empty() {
+            Ok(KnownDescriptor::Unknown(data.to_vec()))
+        } else if HealthServiceStatusDescriptor::from_gatt(data).is_ok() {
             Ok(KnownDescriptor::Status(HealthServiceStatusDescriptor))
         } else if HealthServicePingDescriptor::from_gatt(data).is_ok() {
             Ok(KnownDescriptor::Ping(HealthServicePingDescriptor))
         } else {
-            Ok(KnownDescriptor::Unknown)
+            Ok(KnownDescriptor::Unknown(data.to_vec()))
         }
     }
 }

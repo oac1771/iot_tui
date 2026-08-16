@@ -150,7 +150,7 @@ impl<'a> DisplayWidget<'a> {
         buf: &mut Buffer,
         block: &Block,
         response: &[u8],
-        characteristic: KnownCharacteristic,
+        characteristic: &KnownCharacteristic,
     ) {
         let inner = block.inner(area);
         let layout = Layout::default()
@@ -207,17 +207,15 @@ impl<'a> DisplayWidget<'a> {
                 scanning_message,
             )
         } else if let View::Characteristic(ViewState::Payload(characteristic_id)) = self.view {
-            let characteristic = self
-                .state
-                .get_characteristic(characteristic_id)
-                .expect("fOOOOO");
-            if let Some(response) = self.state.get_characteristic_response(&characteristic_id) {
+            if let Some(characteristic) = self.state.get_characteristic(characteristic_id)
+                && let Some(response) = self.state.get_characteristic_response(&characteristic_id)
+            {
                 self.render_characteristic_response(
                     right_area,
                     buf,
                     &characteristic_block,
                     response.data(),
-                    characteristic.clone(),
+                    characteristic,
                 );
             }
         } else if self.state.get_characteristics().is_some() {
@@ -288,7 +286,13 @@ impl<'a> DisplayWidget<'a> {
             let descriptors = Line::from(
                 characteristic
                     .descriptors()
-                    .map(|d| Span::raw(d.metadata()))
+                    .filter_map(|d| {
+                        if !d.metadata().is_empty() {
+                            Some(Span::raw(format!("{:?}", d.metadata())))
+                        } else {
+                            None
+                        }
+                    })
                     .collect::<Vec<Span>>(),
             )
             .centered();
