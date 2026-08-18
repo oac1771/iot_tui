@@ -12,6 +12,7 @@ pub struct State {
     characteristics: Vec<Vec<KnownCharacteristic>>,
     characteristic_responses: HashMap<Uuid, CharacteristicResponse>,
     characteristic_map: BTreeMap<Uuid, KnownCharacteristic>,
+    pub input: Input,
 }
 
 impl State {
@@ -142,6 +143,7 @@ impl Default for State {
             characteristics: vec![vec![]; 1],
             characteristic_responses: HashMap::new(),
             characteristic_map: BTreeMap::new(),
+            input: Input::default(),
         }
     }
 }
@@ -159,4 +161,10 @@ impl CharacteristicResponse {
     pub fn data(&self) -> &[u8] {
         &self.raw_data
     }
+}
+
+#[derive(Default, Debug)]
+pub struct Input {
+    pub(crate) value: String,
+    pub(crate) character_index: usize,
 }

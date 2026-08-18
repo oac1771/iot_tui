@@ -19,7 +19,6 @@ pub struct HomePage {
     state: State,
     view: View,
     error: Option<String>,
-    input: Input,
     peripherals_client: PeripheralsClient,
 }
 
@@ -35,75 +34,75 @@ enum ViewState {
     Editing(KnownCharacteristic),
 }
 
-#[derive(Default)]
-struct Input {
-    value: String,
-    character_index: usize
-}
-
 impl HomePage {
     pub fn new(peripherals_client: PeripheralsClient) -> Self {
         Self {
             state: State::default(),
             error: None,
-            input: Input::default(),
             view: View::Peripheral(ViewState::Idle),
             peripherals_client,
         }
     }
 
     fn move_cursor_left(&mut self) {
-        let cursor_moved_left = self.input.character_index.saturating_sub(1);
-        self.input.character_index = self.clamp_cursor(cursor_moved_left);
+        let cursor_moved_left = self.state.input.character_index.saturating_sub(1);
+        self.state.input.character_index = self.clamp_cursor(cursor_moved_left);
     }
 
     fn move_cursor_right(&mut self) {
-        let cursor_moved_right = self.input.character_index.saturating_add(1);
-        self.input.character_index = self.clamp_cursor(cursor_moved_right);
+        let cursor_moved_right = self.state.input.character_index.saturating_add(1);
+        self.state.input.character_index = self.clamp_cursor(cursor_moved_right);
     }
 
     fn enter_char(&mut self, new_char: char) {
         let index = self.byte_index();
-        self.input.value.insert(index, new_char);
+        self.state.input.value.insert(index, new_char);
         self.move_cursor_right();
     }
 
     fn byte_index(&self) -> usize {
-        self.input.value
+        self.state
+            .input
+            .value
             .char_indices()
             .map(|(i, _)| i)
-            .nth(self.input.character_index)
-            .unwrap_or(self.input.value.len())
+            .nth(self.state.input.character_index)
+            .unwrap_or(self.state.input.value.len())
     }
 
     fn delete_char(&mut self) {
-        let is_not_cursor_leftmost = self.input.character_index != 0;
+        let is_not_cursor_leftmost = self.state.input.character_index != 0;
         if is_not_cursor_leftmost {
             // Method "remove" is not used on the saved text for deleting the selected char.
             // Reason: Using remove on String works on bytes instead of the chars.
             // Using remove would require special care because of char boundaries.
 
-            let current_index = self.input.character_index;
+            let current_index = self.state.input.character_index;
             let from_left_to_current_index = current_index - 1;
 
             // Getting all characters before the selected character.
-            let before_char_to_delete = self.input.value.chars().take(from_left_to_current_index);
+            let before_char_to_delete = self
+                .state
+                .input
+                .value
+                .chars()
+                .take(from_left_to_current_index);
             // Getting all characters after selected character.
-            let after_char_to_delete = self.input.value.chars().skip(current_index);
+            let after_char_to_delete = self.state.input.value.chars().skip(current_index);
 
             // Put all characters together except the selected one.
             // By leaving the selected one out, it is forgotten and therefore deleted.
-            self.input.value = before_char_to_delete.chain(after_char_to_delete).collect();
+            self.state.input.value = before_char_to_delete.chain(after_char_to_delete).collect();
             self.move_cursor_left();
         }
     }
 
     fn clamp_cursor(&self, new_cursor_pos: usize) -> usize {
-        new_cursor_pos.clamp(0, self.input.value.chars().count())
+        new_cursor_pos.clamp(0, self.state.input.value.chars().count())
     }
 
     const fn reset_cursor(&mut self) {
-        self.input.character_index = 0;
+        self.state.input.character_index = 0;
     }
 }
 
@@ -174,17 +173,18 @@ impl Page for HomePage {
                     KeyCode::Left => self.move_cursor_left(),
                     KeyCode::Right => self.move_cursor_right(),
                     KeyCode::Enter => {
-                        println!("Write data! {}", self.input.value);
+                        println!("Write data! {}", self.state.input.value);
                         // if let Err(err) = characteristic.validate_write_data(&[]) {
                         //     return Err(err);
                         // } else {
                         //     println!("Sending write!");
+                        //     let data = self.input.value;
+                        //     self.input.value.clear();
+                        //     self.reset_cursor();
                         //     let peripheral = self.state.get_indexed_peripheral();
                         //     self.peripherals_client
                         //         .write(peripheral.clone(), characteristic.id(), &[])
                         //         .await?;
-                        //     self.input.value.clear();
-                        //     self.reset_cursor();
                         // }
                     }
                     _ => {}

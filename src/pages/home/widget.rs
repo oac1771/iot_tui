@@ -6,7 +6,7 @@ use iot_sdk::CharPropFlags;
 use ratatui::{
     buffer::Buffer,
     layout::{Alignment, Constraint, Direction, Flex, Layout, Rect},
-    style::{Style, Stylize},
+    style::{Color, Style, Stylize},
     symbols::border,
     text::{Line, Span, Text},
     widgets::{Block, Clear, List, ListItem, ListState, Paragraph, StatefulWidget, Widget, Wrap},
@@ -301,22 +301,42 @@ impl<'a> DisplayWidget<'a> {
             )
             .centered();
             let view_descriptors = Text::from(descriptors);
-            Paragraph::new(view_descriptors.centered())
-                .centered()
-                .render(descriptor_area, buf);
+
+            // match self.view {
+            //     View::Characteristic(ViewState::Editing(_)) => {},
+            //     View::Characteristic(ViewState::Idle) => {},
+            //     View::Characteristic(ViewState::Payload(characteristic_id)) => {
+            //         if self
+            //         .state
+            //         .get_characteristic_response(characteristic_id)
+            //         .is_some() {
+
+            //         }
+            //     },
+            //     _ => {}
+            // }
 
             if let View::Characteristic(ViewState::Idle) = self.view
                 && characteristic.properties().contains(CharPropFlags::READ)
             {
                 cmds.push(Line::from(vec![" Read: ".into(), " <r> ".blue().bold()]).centered());
+                Paragraph::new(view_descriptors.centered())
+                    .centered()
+                    .render(descriptor_area, buf);
             } else if let View::Characteristic(ViewState::Idle) = self.view
                 && characteristic.properties().contains(CharPropFlags::WRITE)
             {
                 cmds.push(Line::from(vec![" Write: ".into(), " <w> ".blue().bold()]).centered());
+                Paragraph::new(view_descriptors.centered())
+                    .centered()
+                    .render(descriptor_area, buf);
             } else if let View::Characteristic(ViewState::Idle) = self.view
                 && characteristic.properties().contains(CharPropFlags::NOTIFY)
             {
                 cmds.push(Line::from(vec![" Notify: ".into(), " <n> ".blue().bold()]).centered());
+                Paragraph::new(view_descriptors.centered())
+                    .centered()
+                    .render(descriptor_area, buf);
             } else if let View::Characteristic(ViewState::Payload(characteristic_id)) = self.view
                 && self
                     .state
@@ -330,6 +350,25 @@ impl<'a> DisplayWidget<'a> {
                     ])
                     .centered(),
                 );
+            } else if let View::Characteristic(ViewState::Editing(_)) = self.view {
+                let msg = vec![
+                    "Press ".into(),
+                    "Esc".bold(),
+                    " to stop editing, ".into(),
+                    "Enter".bold(),
+                    " to submit write request".into(),
+                ];
+                let text = Text::from(Line::from(msg));
+                Paragraph::new(text).centered().render(descriptor_area, buf);
+
+                Paragraph::new(self.state.input.value.as_str())
+                    .style(Style::default().fg(Color::Yellow))
+                    .block(
+                        Block::bordered()
+                            .title("Payload")
+                            .title_alignment(Alignment::Center),
+                    )
+                    .render(descriptor_area, buf);
             }
         }
 
