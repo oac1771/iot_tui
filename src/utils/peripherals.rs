@@ -48,7 +48,8 @@ pub struct PeripheralsClient(Sender<PeripheralRequest>);
 pub enum PeripheralRequest {
     GetPheripherals,
     GetCharacteristics(PlatformPeripheral),
-    Read((PlatformPeripheral, KnownCharacteristic)),
+    Read((PlatformPeripheral, Uuid)),
+    Write((PlatformPeripheral, Uuid)),
 }
 
 #[derive(Debug)]
@@ -61,7 +62,7 @@ pub enum PeripheralResponse {
     GetCharacteristics(Vec<KnownCharacteristic>),
     CharacteristicScanError(String),
     ReadCharacteristicCallStarted,
-    ReadCharacteristic((KnownCharacteristic, Vec<u8>)),
+    ReadCharacteristic((Uuid, Vec<u8>)),
 }
 
 impl Peripherals {
@@ -84,9 +85,14 @@ impl Peripherals {
                 PeripheralRequest::GetCharacteristics(peripheral) => {
                     Self::get_characteristics(tx, peripheral).boxed()
                 }
-                PeripheralRequest::Read((peripheral, characteristic)) => {
-                    Self::read_characteristic(central, tx, peripheral, characteristic).boxed()
+                PeripheralRequest::Read((peripheral, characteristic_id)) => {
+                    Self::read_characteristic(central, tx, peripheral, characteristic_id).boxed()
                 }
+                PeripheralRequest::Write((peripheral, characteristic_id)) => async {
+                    println!("Handling write in central handler");
+                    Ok(())
+                }
+                .boxed(),
             };
 
         tokio::spawn(async move {
@@ -195,7 +201,7 @@ impl Peripherals {
         central: Central,
         tx: Sender<PeripheralResponse>,
         peripheral: PlatformPeripheral,
-        characteristic: KnownCharacteristic,
+        characteristic_id: Uuid,
     ) -> Result<(), String> {
         let result = async {
             tx.send(PeripheralResponse::ReadCharacteristicCallStarted)
@@ -203,11 +209,11 @@ impl Peripherals {
                 .map_err(|e| e.to_string())?;
 
             let result = select! {
-                result = central.read(&peripheral, characteristic.id()) => result.map_err(|e| e.to_string()),
+                result = central.read(&peripheral, characteristic_id) => result.map_err(|e| e.to_string()),
                 _ = sleep(Duration::from_secs(5)) => Err("Timed out reading characteristic value".to_string())
             }?;
 
-            let response = PeripheralResponse::ReadCharacteristic((characteristic, result));
+            let response = PeripheralResponse::ReadCharacteristic((characteristic_id, result));
             tx.send(response).await.map_err(|e| e.to_string())?;
 
             Ok(())
@@ -246,9 +252,20 @@ impl PeripheralsClient {
     pub async fn read(
         &self,
         peripheral: PlatformPeripheral,
-        characteristic: &KnownCharacteristic,
+        characteristic_id: Uuid,
     ) -> Result<(), String> {
-        let request = PeripheralRequest::Read((peripheral, characteristic.clone()));
+        let request = PeripheralRequest::Read((peripheral, characteristic_id));
+        self.send_request(request).await?;
+        Ok(())
+    }
+
+    pub async fn write(
+        &self,
+        peripheral: PlatformPeripheral,
+        characteristic_id: Uuid,
+        data: &[u8],
+    ) -> Result<(), String> {
+        let request = PeripheralRequest::Write((peripheral, characteristic_id));
         self.send_request(request).await?;
         Ok(())
     }
@@ -333,6 +350,12 @@ impl KnownCharacteristic {
             CharacteristicType::Unknown => format!("ID: {}, {:?}", self.id(), self.properties()),
         }
     }
+
+    pub fn validate_write_data(&self, data: &[u8]) -> Result<(), String> {
+        self.descriptors()
+            .try_for_each(|d| d.validate_write_data(data))?;
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -350,6 +373,14 @@ impl KnownDescriptor {
             KnownDescriptor::Unknown(d) => {
                 String::from_utf8(d.to_vec()).unwrap_or(String::from(""))
             }
+        }
+    }
+
+    fn validate_write_data(&self, data: &[u8]) -> Result<(), String> {
+        match self {
+            KnownDescriptor::Ping(_) => Ok(()),
+            KnownDescriptor::Status(_) => Ok(()),
+            KnownDescriptor::Unknown(_) => Ok(()),
         }
     }
 }

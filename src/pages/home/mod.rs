@@ -85,7 +85,7 @@ impl Page for HomePage {
                         {
                             let peripheral = self.state.get_indexed_peripheral();
                             self.peripherals_client
-                                .read(peripheral.clone(), characteristic)
+                                .read(peripheral.clone(), characteristic.id())
                                 .await?;
                         }
                     }
@@ -93,8 +93,15 @@ impl Page for HomePage {
                         if let Some(characteristic) = self.state.get_indexed_characteristic()
                             && characteristic.properties().contains(CharPropFlags::WRITE)
                         {
-                            println!("Sending write!")
-                            // change view State to editing
+                            if let Err(err) = characteristic.validate_write_data(&[]) {
+                                return Err(err);
+                            } else {
+                                println!("Sending write!");
+                                let peripheral = self.state.get_indexed_peripheral();
+                                self.peripherals_client
+                                    .write(peripheral.clone(), characteristic.id(), &[])
+                                    .await?;
+                            }
                         }
                     }
                     _ => {}
@@ -168,11 +175,10 @@ impl Page for HomePage {
                     String::from("Sending Read Request..."),
                 )))
             }
-            PeripheralResponse::ReadCharacteristic((characteristic, response)) => {
-                let characteristic_id = characteristic.id();
+            PeripheralResponse::ReadCharacteristic((characteristic_id, response)) => {
                 self.view = View::Characteristic(ViewState::Payload(characteristic_id));
                 self.state
-                    .update_characteristic_response(characteristic, response);
+                    .update_characteristic_response(characteristic_id, response);
             }
         };
         Ok(())

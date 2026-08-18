@@ -121,12 +121,7 @@ impl State {
         self.characteristic_index = index;
     }
 
-    pub fn update_characteristic_response(
-        &mut self,
-        characteristic: KnownCharacteristic,
-        response: Vec<u8>,
-    ) {
-        let characteristic_id = characteristic.id();
+    pub fn update_characteristic_response(&mut self, characteristic_id: Uuid, response: Vec<u8>) {
         let characteristic_response = CharacteristicResponse::new(response);
         self.characteristic_responses
             .insert(characteristic_id, characteristic_response);

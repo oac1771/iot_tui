@@ -1,5 +1,4 @@
-Get characteristic response should return Vec<KnownCharacteristic<T>>
-    - Where knowncharacteristic holds characteristic and T is the descriptor type
-
-Descriptor type should impl some Trait that has associated type for Read value, expected write value
-write to device
+Finish validate write data logic
+    - git push
+try refactor to make knowndecriptors a struct that has a field that is T: Foo, and a field that is known descriptor type enum
+    - impl Foo for KnownDescriptor<T>
