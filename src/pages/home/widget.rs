@@ -274,83 +274,68 @@ impl<'a> DisplayWidget<'a> {
 
         let mut cmds = Vec::new();
 
-        if let View::Peripheral(ViewState::Idle) = self.view {
-            cmds.push(Line::from(vec![
-                " Peripheral Scan: ".into(),
-                " <s> ".blue().bold(),
-            ]));
+        match (self.view, self.state.get_indexed_characteristic()) {
+            (View::Peripheral(ViewState::Idle), None) => {
+                cmds.push(Line::from(vec![
+                    " Peripheral Scan: ".into(),
+                    " <s> ".blue().bold(),
+                ]));
 
-            if !self.state.get_local_names().is_empty() {
-                cmds.push(
-                    Line::from(vec![" Characteristic Scan: ".into(), " <c> ".blue().bold()])
-                        .centered(),
-                );
+                if !self.state.get_local_names().is_empty() {
+                    cmds.push(
+                        Line::from(vec![" Characteristic Scan: ".into(), " <c> ".blue().bold()])
+                            .centered(),
+                    );
+                }
             }
-        } else if let Some(characteristic) = self.state.get_indexed_characteristic() {
-            let descriptors = Line::from(
-                characteristic
-                    .descriptors()
-                    .filter_map(|d| {
-                        if !d.metadata().is_empty() {
-                            Some(Span::raw(format!("{:?}", d.metadata())))
-                        } else {
-                            None
-                        }
-                    })
-                    .collect::<Vec<Span>>(),
-            )
-            .centered();
-            let view_descriptors = Text::from(descriptors);
+            (View::Characteristic(ViewState::Idle), Some(characteristic)) => {
+                let descriptors = Line::from(
+                    characteristic
+                        .descriptors()
+                        .filter_map(|d| {
+                            if !d.metadata().is_empty() {
+                                Some(Span::raw(format!("{:?}", d.metadata())))
+                            } else {
+                                None
+                            }
+                        })
+                        .collect::<Vec<Span>>(),
+                )
+                .centered();
+                let view_descriptors = Text::from(descriptors);
 
-            // match self.view {
-            //     View::Characteristic(ViewState::Editing(_)) => {},
-            //     View::Characteristic(ViewState::Idle) => {},
-            //     View::Characteristic(ViewState::Payload(characteristic_id)) => {
-            //         if self
-            //         .state
-            //         .get_characteristic_response(characteristic_id)
-            //         .is_some() {
-
-            //         }
-            //     },
-            //     _ => {}
-            // }
-
-            if let View::Characteristic(ViewState::Idle) = self.view
-                && characteristic.properties().contains(CharPropFlags::READ)
-            {
-                cmds.push(Line::from(vec![" Read: ".into(), " <r> ".blue().bold()]).centered());
                 Paragraph::new(view_descriptors.centered())
                     .centered()
                     .render(descriptor_area, buf);
-            } else if let View::Characteristic(ViewState::Idle) = self.view
-                && characteristic.properties().contains(CharPropFlags::WRITE)
-            {
-                cmds.push(Line::from(vec![" Write: ".into(), " <w> ".blue().bold()]).centered());
-                Paragraph::new(view_descriptors.centered())
-                    .centered()
-                    .render(descriptor_area, buf);
-            } else if let View::Characteristic(ViewState::Idle) = self.view
-                && characteristic.properties().contains(CharPropFlags::NOTIFY)
-            {
-                cmds.push(Line::from(vec![" Notify: ".into(), " <n> ".blue().bold()]).centered());
-                Paragraph::new(view_descriptors.centered())
-                    .centered()
-                    .render(descriptor_area, buf);
-            } else if let View::Characteristic(ViewState::Payload(characteristic_id)) = self.view
-                && self
+
+                if characteristic.properties().contains(CharPropFlags::READ) {
+                    cmds.push(Line::from(vec![" Read: ".into(), " <r> ".blue().bold()]).centered());
+                } else if characteristic.properties().contains(CharPropFlags::WRITE) {
+                    cmds.push(
+                        Line::from(vec![" Write: ".into(), " <w> ".blue().bold()]).centered(),
+                    );
+                } else if characteristic.properties().contains(CharPropFlags::NOTIFY) {
+                    cmds.push(
+                        Line::from(vec![" Notify: ".into(), " <n> ".blue().bold()]).centered(),
+                    );
+                }
+            }
+            (View::Characteristic(ViewState::Payload(characteristic_id)), _) => {
+                if self
                     .state
                     .get_characteristic_response(characteristic_id)
                     .is_some()
-            {
-                cmds.push(
-                    Line::from(vec![
-                        " Go back to Characteristic View: ".into(),
-                        " <Esc> ".blue().bold(),
-                    ])
-                    .centered(),
-                );
-            } else if let View::Characteristic(ViewState::Editing(_)) = self.view {
+                {
+                    cmds.push(
+                        Line::from(vec![
+                            " Go back to Characteristic View: ".into(),
+                            " <Esc> ".blue().bold(),
+                        ])
+                        .centered(),
+                    );
+                }
+            }
+            (View::Characteristic(ViewState::Editing(_)), Some(_characteristic)) => {
                 let msg = vec![
                     "Press ".into(),
                     "Esc".bold(),
@@ -370,6 +355,7 @@ impl<'a> DisplayWidget<'a> {
                     )
                     .render(descriptor_area, buf);
             }
+            _ => {}
         }
 
         let view_specific_cmds = Text::from(cmds);
