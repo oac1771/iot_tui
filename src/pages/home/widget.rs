@@ -272,10 +272,11 @@ impl<'a> DisplayWidget<'a> {
 
         let [view_command_area, descriptor_area] = layout.areas(area);
 
-        let mut cmds = Vec::new();
-
         match (self.view, self.state.get_indexed_characteristic()) {
             (View::Peripheral(ViewState::Idle), None) => {
+
+                let mut cmds = Vec::new();
+
                 cmds.push(Line::from(vec![
                     " Peripheral Scan: ".into(),
                     " <s> ".blue().bold(),
@@ -287,8 +288,16 @@ impl<'a> DisplayWidget<'a> {
                             .centered(),
                     );
                 }
+
+                let view_specific_cmds = Text::from(cmds);
+
+                Paragraph::new(view_specific_cmds.centered())
+                    .centered()
+                    .render(view_command_area, buf);
             }
             (View::Characteristic(ViewState::Idle), Some(characteristic)) => {
+                let mut cmds = Vec::new();
+
                 let descriptors = Line::from(
                     characteristic
                         .descriptors()
@@ -319,8 +328,16 @@ impl<'a> DisplayWidget<'a> {
                         Line::from(vec![" Notify: ".into(), " <n> ".blue().bold()]).centered(),
                     );
                 }
+
+                let view_specific_cmds = Text::from(cmds);
+
+                Paragraph::new(view_specific_cmds.centered())
+                    .centered()
+                    .render(view_command_area, buf);
             }
             (View::Characteristic(ViewState::Payload(characteristic_id)), _) => {
+                let mut cmds = Vec::new();
+
                 if self
                     .state
                     .get_characteristic_response(characteristic_id)
@@ -334,6 +351,12 @@ impl<'a> DisplayWidget<'a> {
                         .centered(),
                     );
                 }
+
+                let view_specific_cmds = Text::from(cmds);
+
+                Paragraph::new(view_specific_cmds.centered())
+                    .centered()
+                    .render(view_command_area, buf);
             }
             (View::Characteristic(ViewState::Editing(_)), Some(_characteristic)) => {
                 let msg = vec![
@@ -344,7 +367,7 @@ impl<'a> DisplayWidget<'a> {
                     " to submit write request".into(),
                 ];
                 let text = Text::from(Line::from(msg));
-                Paragraph::new(text).centered().render(descriptor_area, buf);
+                Paragraph::new(text).centered().render(view_command_area, buf);
 
                 Paragraph::new(self.state.input.value.as_str())
                     .style(Style::default().fg(Color::Yellow))
@@ -357,12 +380,6 @@ impl<'a> DisplayWidget<'a> {
             }
             _ => {}
         }
-
-        let view_specific_cmds = Text::from(cmds);
-
-        Paragraph::new(view_specific_cmds.centered())
-            .centered()
-            .render(view_command_area, buf);
     }
 }
 
