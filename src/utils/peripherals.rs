@@ -8,7 +8,7 @@ use services::{
         HEALTH_PING_CHAR_UUID, HEALTH_STATUS_CHAR_UUID, HealthServicePingDescriptor,
         HealthServiceStatusDescriptor,
     },
-    storage::STORAGE_STATUS_CHAR_UUID,
+    storage::{STORAGE_STATUS_CHAR_UUID, StorageServiceDataDescriptor},
     trouble_host::types::gatt_traits::{AsGatt, FromGatt, FromGattError},
 };
 use std::pin::Pin;
@@ -334,8 +334,8 @@ impl KnownCharacteristic {
             CharacteristicType::Storage => Ok(String::from("foo bar")),
             CharacteristicType::Unknown => {
                 let inner = String::from_utf8(data.to_vec())
-                    .map_err(|_| String::from(format!("Unable to deserialize: {:?}", data)))?;
-                return Ok(inner);
+                    .map_err(|_| format!("Unable to deserialize: {:?}", data))?;
+                Ok(inner)
             }
         }
     }
@@ -362,6 +362,7 @@ impl KnownCharacteristic {
 pub enum KnownDescriptor {
     Status(HealthServiceStatusDescriptor),
     Ping(HealthServicePingDescriptor),
+    Storage(StorageServiceDataDescriptor),
     Unknown(Vec<u8>),
 }
 
@@ -370,6 +371,7 @@ impl KnownDescriptor {
         match self {
             KnownDescriptor::Ping(_) => String::from("Ping"),
             KnownDescriptor::Status(_) => String::from("Status"),
+            KnownDescriptor::Storage(_) => String::from("Storage"),
             KnownDescriptor::Unknown(d) => {
                 String::from_utf8(d.to_vec()).unwrap_or(String::from(""))
             }
@@ -380,6 +382,7 @@ impl KnownDescriptor {
         match self {
             KnownDescriptor::Ping(_) => Ok(()),
             KnownDescriptor::Status(_) => Ok(()),
+            KnownDescriptor::Storage(_) => Ok(()),
             KnownDescriptor::Unknown(_) => Ok(()),
         }
     }
@@ -393,6 +396,8 @@ impl FromGatt for KnownDescriptor {
             Ok(KnownDescriptor::Status(HealthServiceStatusDescriptor))
         } else if HealthServicePingDescriptor::from_gatt(data).is_ok() {
             Ok(KnownDescriptor::Ping(HealthServicePingDescriptor))
+        } else if HealthServicePingDescriptor::from_gatt(data).is_ok() {
+            Ok(KnownDescriptor::Storage(StorageServiceDataDescriptor))
         } else {
             Ok(KnownDescriptor::Unknown(data.to_vec()))
         }

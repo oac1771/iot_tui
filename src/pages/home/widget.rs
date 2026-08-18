@@ -210,18 +210,17 @@ impl<'a> DisplayWidget<'a> {
             )
         } else if let View::Characteristic(ViewState::Payload(characteristic_id)) = self.view {
             if let Some(characteristic) = self.state.get_characteristic(characteristic_id)
-                && let Some(response) = self.state.get_characteristic_response(&characteristic_id)
-            {
-                if let Err(err) = self.render_characteristic_response(
+                && let Some(response) = self.state.get_characteristic_response(characteristic_id)
+                && let Err(err) = self.render_characteristic_response(
                     right_area,
                     buf,
                     &characteristic_block,
                     response.data(),
                     characteristic,
-                ) {
-                    let error = PopUpErrorWidget::new(&err);
-                    error.render(right_area, buf);
-                }
+                )
+            {
+                let error = PopUpErrorWidget::new(&err);
+                error.render(right_area, buf);
             }
         } else if self.state.get_characteristics().is_some() {
             self.render_characteristics(right_area, buf, &characteristic_block)
