@@ -31,7 +31,7 @@ enum ViewState {
     Idle,
     Scanning((Spinner, String)),
     Payload(Uuid),
-    Editing(KnownCharacteristic),
+    Editing,
 }
 
 impl HomePage {
@@ -119,7 +119,7 @@ impl Page for HomePage {
 
     async fn handle_key_event(&mut self, key_event: &KeyEvent) -> Result<(), String> {
         if key_event.kind == KeyEventKind::Press && self.error.is_none() {
-            match &self.view {
+            match self.view {
                 View::Peripheral(ViewState::Idle) => match key_event.code {
                     KeyCode::Char('s') => {
                         self.peripherals_client.get_peripherals().await?;
@@ -155,8 +155,7 @@ impl Page for HomePage {
                         if let Some(characteristic) = self.state.get_indexed_characteristic()
                             && characteristic.properties().contains(CharPropFlags::WRITE)
                         {
-                            self.view =
-                                View::Characteristic(ViewState::Editing(characteristic.clone()));
+                            self.view = View::Characteristic(ViewState::Editing);
                         }
                     }
                     _ => {}
@@ -166,26 +165,29 @@ impl Page for HomePage {
                         self.view = View::Characteristic(ViewState::Idle)
                     }
                 }
-                View::Characteristic(ViewState::Editing(characteristic)) => match key_event.code {
+                View::Characteristic(ViewState::Editing) => match key_event.code {
                     KeyCode::Esc => self.view = View::Characteristic(ViewState::Idle),
                     KeyCode::Char(to_insert) => self.enter_char(to_insert),
                     KeyCode::Backspace => self.delete_char(),
                     KeyCode::Left => self.move_cursor_left(),
                     KeyCode::Right => self.move_cursor_right(),
                     KeyCode::Enter => {
-                        println!("Write data! {}", self.state.input.value);
-                        // if let Err(err) = characteristic.validate_write_data(&[]) {
-                        //     return Err(err);
-                        // } else {
-                        //     println!("Sending write!");
-                        //     let data = self.input.value;
-                        //     self.input.value.clear();
-                        //     self.reset_cursor();
-                        //     let peripheral = self.state.get_indexed_peripheral();
-                        //     self.peripherals_client
-                        //         .write(peripheral.clone(), characteristic.id(), &[])
-                        //         .await?;
-                        // }
+                        let write_data = self.state.input.value.clone();
+                        self.state.input.value.clear();
+                        self.reset_cursor();
+                        let data = write_data.as_bytes();
+
+                        if let Some(characteristic) = self.state.get_indexed_characteristic() {
+                            if let Err(err) = characteristic.validate_write_data(data) {
+                                self.error = Some(err);
+                            } else {
+                                println!("Sending write!");
+                                let peripheral = self.state.get_indexed_peripheral();
+                                self.peripherals_client
+                                    .write(peripheral.clone(), characteristic.id(), data)
+                                    .await?;
+                            }
+                        }
                     }
                     _ => {}
                 },

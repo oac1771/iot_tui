@@ -353,7 +353,8 @@ impl KnownCharacteristic {
 
     pub fn validate_write_data(&self, data: &[u8]) -> Result<(), String> {
         self.descriptors()
-            .try_for_each(|d| d.validate_write_data(data))?;
+            .try_for_each(|d| d.validate_write_data(data))
+            .map_err(|err| format!("Error validating write data: {}", err))?;
         Ok(())
     }
 }

@@ -6,7 +6,7 @@ use iot_sdk::CharPropFlags;
 use ratatui::{
     buffer::Buffer,
     layout::{Alignment, Constraint, Direction, Flex, Layout, Rect},
-    style::{Color, Style, Stylize},
+    style::{Style, Stylize},
     symbols::border,
     text::{Line, Span, Text},
     widgets::{Block, Clear, List, ListItem, ListState, Paragraph, StatefulWidget, Widget, Wrap},
@@ -274,7 +274,6 @@ impl<'a> DisplayWidget<'a> {
 
         match (self.view, self.state.get_indexed_characteristic()) {
             (View::Peripheral(ViewState::Idle), None) => {
-
                 let mut cmds = Vec::new();
 
                 cmds.push(Line::from(vec![
@@ -358,24 +357,36 @@ impl<'a> DisplayWidget<'a> {
                     .centered()
                     .render(view_command_area, buf);
             }
-            (View::Characteristic(ViewState::Editing(_)), Some(_characteristic)) => {
-                let msg = vec![
-                    "Press ".into(),
-                    "Esc".bold(),
-                    " to stop editing, ".into(),
-                    "Enter".bold(),
-                    " to submit write request".into(),
+            (View::Characteristic(ViewState::Editing), Some(_characteristic)) => {
+                let lines = vec![
+                    Line::from(vec![
+                        "Press ".into(),
+                        "Esc".bold(),
+                        " to exit editing mode".into(),
+                    ]),
+                    Line::from(vec![
+                        "Press ".into(),
+                        "Enter".bold(),
+                        " to submit write request".into(),
+                    ]),
                 ];
-                let text = Text::from(Line::from(msg));
-                Paragraph::new(text).centered().render(view_command_area, buf);
+
+                let text = Text::from(lines);
+                Paragraph::new(text)
+                    .centered()
+                    .render(view_command_area, buf);
+
+                let payload_block = Block::bordered()
+                    .border_set(border::DOUBLE)
+                    .border_style(Style::new().light_green())
+                    .title_top(
+                        Line::from("  Payload  ")
+                            .style(Style::new().light_green())
+                            .centered(),
+                    );
 
                 Paragraph::new(self.state.input.value.as_str())
-                    .style(Style::default().fg(Color::Yellow))
-                    .block(
-                        Block::bordered()
-                            .title("Payload")
-                            .title_alignment(Alignment::Center),
-                    )
+                    .block(payload_block)
                     .render(descriptor_area, buf);
             }
             _ => {}
