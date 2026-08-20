@@ -1,6 +1,9 @@
 use crate::{
     pages::home::{View, ViewState, state::State},
-    utils::{peripherals::KnownCharacteristic, spinner::Spinner},
+    utils::{
+        peripherals::{CharacteristicType, KnownCharacteristic},
+        spinner::Spinner,
+    },
 };
 use iot_sdk::CharPropFlags;
 use ratatui::{
@@ -318,13 +321,13 @@ impl<'a> DisplayWidget<'a> {
 
                 if characteristic.properties().contains(CharPropFlags::READ) {
                     cmds.push(Line::from(vec![" Read: ".into(), " <r> ".blue().bold()]).centered());
-                } else if characteristic.properties().contains(CharPropFlags::WRITE) {
-                    cmds.push(
-                        Line::from(vec![" Write: ".into(), " <w> ".blue().bold()]).centered(),
-                    );
                 } else if characteristic.properties().contains(CharPropFlags::NOTIFY) {
                     cmds.push(
                         Line::from(vec![" Notify: ".into(), " <n> ".blue().bold()]).centered(),
+                    );
+                } else if characteristic.properties().contains(CharPropFlags::WRITE) {
+                    cmds.push(
+                        Line::from(vec![" Write: ".into(), " <w> ".blue().bold()]).centered(),
                     );
                 }
 
@@ -357,8 +360,8 @@ impl<'a> DisplayWidget<'a> {
                     .centered()
                     .render(view_command_area, buf);
             }
-            (View::Characteristic(ViewState::Editing), Some(_characteristic)) => {
-                let lines = vec![
+            (View::Characteristic(ViewState::Editing), Some(characteristic)) => {
+                let mut lines = vec![
                     Line::from(vec![
                         "Press ".into(),
                         "Esc".bold(),
@@ -370,6 +373,13 @@ impl<'a> DisplayWidget<'a> {
                         " to submit write request".into(),
                     ]),
                 ];
+
+                if let CharacteristicType::Unknown = characteristic.characteristic_type() {
+                    lines.push(Line::from(vec![
+                        "Unknown Characteristic".into(),
+                        "cannot validate write data".into(),
+                    ]));
+                }
 
                 let text = Text::from(lines);
                 Paragraph::new(text)

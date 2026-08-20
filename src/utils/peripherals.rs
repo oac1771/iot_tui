@@ -4,6 +4,7 @@ use iot_sdk::{
     CharPropFlags, Characteristic, Peripheral, PlatformPeripheral, Uuid, central::Central,
 };
 use services::{
+    Foo,
     health::{
         HEALTH_PING_CHAR_UUID, HEALTH_STATUS_CHAR_UUID, HealthServicePingDescriptor,
         HealthServiceStatusDescriptor,
@@ -285,7 +286,7 @@ pub struct KnownCharacteristic {
 }
 
 #[derive(Debug, Clone)]
-enum CharacteristicType {
+pub enum CharacteristicType {
     Ping,
     Status,
     Storage,
@@ -313,6 +314,10 @@ impl KnownCharacteristic {
             descriptors,
             characteristic_type,
         }
+    }
+
+    pub fn characteristic_type(&self) -> &CharacteristicType {
+        &self.characteristic_type
     }
 
     pub fn descriptors(&self) -> impl Iterator<Item = &KnownDescriptor> {
@@ -352,10 +357,24 @@ impl KnownCharacteristic {
     }
 
     pub fn validate_write_data(&self, data: &[u8]) -> Result<(), String> {
-        self.descriptors()
-            .try_for_each(|d| d.validate_write_data(data))
-            .map_err(|err| format!("Error validating write data: {}", err))?;
-        Ok(())
+        if let Some(descriptor) = self
+            .descriptors()
+            .filter_map(|d| {
+                if !d.validate_write_data(data) {
+                    Some(d)
+                } else {
+                    None
+                }
+            })
+            .next()
+        {
+            Err(format!(
+                "Error validating write data for: {}",
+                descriptor.metadata()
+            ))
+        } else {
+            Ok(())
+        }
     }
 }
 
@@ -379,12 +398,12 @@ impl KnownDescriptor {
         }
     }
 
-    fn validate_write_data(&self, data: &[u8]) -> Result<(), String> {
+    fn validate_write_data(&self, data: &[u8]) -> bool {
         match self {
-            KnownDescriptor::Ping(_) => Ok(()),
-            KnownDescriptor::Status(_) => Ok(()),
-            KnownDescriptor::Storage(_) => Ok(()),
-            KnownDescriptor::Unknown(_) => Ok(()),
+            KnownDescriptor::Ping(d) => d.validate_write_data(data),
+            KnownDescriptor::Status(d) => d.validate_write_data(data),
+            KnownDescriptor::Storage(d) => d.validate_write_data(data),
+            KnownDescriptor::Unknown(_) => true,
         }
     }
 }

@@ -4,7 +4,7 @@ mod widget;
 use crate::{
     pages::home::widget::{DisplayWidget, HomeWidget, PopUpErrorWidget},
     utils::{
-        peripherals::{KnownCharacteristic, PeripheralResponse, PeripheralsClient},
+        peripherals::{PeripheralResponse, PeripheralsClient},
         spinner::Spinner,
     },
 };
@@ -181,7 +181,6 @@ impl Page for HomePage {
                             if let Err(err) = characteristic.validate_write_data(data) {
                                 self.error = Some(err);
                             } else {
-                                println!("Sending write!");
                                 let peripheral = self.state.get_indexed_peripheral();
                                 self.peripherals_client
                                     .write(peripheral.clone(), characteristic.id(), data)
