@@ -57,13 +57,20 @@ pub enum PeripheralRequest {
 pub enum PeripheralResponse {
     PeripheralScanStarted,
     GetPheripherals(Vec<PlatformPeripheral>),
-    PeripheralScanError(String),
     CharacteristicScanStarted,
     ScanningMessageUpdate(String),
     GetCharacteristics(Vec<KnownCharacteristic>),
-    CharacteristicScanError(String),
     ReadCharacteristicCallStarted,
     ReadCharacteristic((Uuid, Vec<u8>)),
+    WriteCharacteristicCallStarted,
+    WriteCharacteristic,
+    Error((ResponseType, String)),
+}
+
+#[derive(Debug)]
+pub enum ResponseType {
+    Peripheral,
+    Characteristic,
 }
 
 impl Peripherals {
@@ -89,11 +96,10 @@ impl Peripherals {
                 PeripheralRequest::Read((peripheral, characteristic_id)) => {
                     Self::read_characteristic(central, tx, peripheral, characteristic_id).boxed()
                 }
-                PeripheralRequest::Write((peripheral, characteristic_id, data)) => async {
-                    println!("Handling write in central handler");
-                    Ok(())
+                PeripheralRequest::Write((peripheral, characteristic_id, data)) => {
+                    Self::write_characteristic(central, tx, peripheral, characteristic_id, data)
+                        .boxed()
                 }
-                .boxed(),
             };
 
         tokio::spawn(async move {
@@ -126,8 +132,8 @@ impl Peripherals {
         }
         .await;
 
-        if let Err(err) = result {
-            tx.send(PeripheralResponse::PeripheralScanError(err))
+        if let Err(err) = result.map_err(|e| (ResponseType::Peripheral, e)) {
+            tx.send(PeripheralResponse::Error(err))
                 .await
                 .map_err(|e| e.to_string())?;
         }
@@ -171,8 +177,8 @@ impl Peripherals {
         }
         .await;
 
-        if let Err(err) = result {
-            tx.send(PeripheralResponse::CharacteristicScanError(err))
+        if let Err(err) = result.map_err(|e| (ResponseType::Characteristic, e)) {
+            tx.send(PeripheralResponse::Error(err))
                 .await
                 .map_err(|e| e.to_string())?;
         }
@@ -221,8 +227,41 @@ impl Peripherals {
         }
         .await;
 
-        if let Err(err) = result {
-            tx.send(PeripheralResponse::CharacteristicScanError(err))
+        if let Err(err) = result.map_err(|e| (ResponseType::Characteristic, e)) {
+            tx.send(PeripheralResponse::Error(err))
+                .await
+                .map_err(|e| e.to_string())?;
+        }
+
+        Ok(())
+    }
+
+    async fn write_characteristic(
+        central: Central,
+        tx: Sender<PeripheralResponse>,
+        peripheral: PlatformPeripheral,
+        characteristic_id: Uuid,
+        data: Vec<u8>,
+    ) -> Result<(), String> {
+        let result = async {
+            tx.send(PeripheralResponse::WriteCharacteristicCallStarted)
+                .await
+                .map_err(|e| e.to_string())?;
+
+            select! {
+                result = central.write(&peripheral, characteristic_id, &data) => result.map_err(|e| e.to_string()),
+                _ = sleep(Duration::from_secs(5)) => Err(format!("Timed out writing: {:?} to characteristic", data))
+            }?;
+
+            let response = PeripheralResponse::WriteCharacteristic;
+            tx.send(response).await.map_err(|e| e.to_string())?;
+
+            Ok(())
+        }
+        .await;
+
+        if let Err(err) = result.map_err(|e| (ResponseType::Characteristic, e)) {
+            tx.send(PeripheralResponse::Error(err))
                 .await
                 .map_err(|e| e.to_string())?;
         }

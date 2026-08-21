@@ -4,7 +4,7 @@ mod widget;
 use crate::{
     pages::home::widget::{DisplayWidget, HomeWidget, PopUpErrorWidget},
     utils::{
-        peripherals::{PeripheralResponse, PeripheralsClient},
+        peripherals::{PeripheralResponse, PeripheralsClient, ResponseType},
         spinner::Spinner,
     },
 };
@@ -227,10 +227,6 @@ impl Page for HomePage {
                 self.state.clear_peripheral_local_names();
                 self.state.update_peripherals(peripherals).await;
             }
-            PeripheralResponse::PeripheralScanError(err) => {
-                self.view = View::Peripheral(ViewState::Idle);
-                self.error = Some(err);
-            }
             PeripheralResponse::CharacteristicScanStarted => {
                 self.view = View::Characteristic(ViewState::Scanning((
                     Spinner::default(),
@@ -251,10 +247,6 @@ impl Page for HomePage {
                     *scanning_message = message
                 }
             }
-            PeripheralResponse::CharacteristicScanError(err) => {
-                self.view = View::Peripheral(ViewState::Idle);
-                self.error = Some(err);
-            }
             PeripheralResponse::ReadCharacteristicCallStarted => {
                 self.view = View::Characteristic(ViewState::Scanning((
                     Spinner::default(),
@@ -265,6 +257,22 @@ impl Page for HomePage {
                 self.view = View::Characteristic(ViewState::Payload(characteristic_id));
                 self.state
                     .update_characteristic_response(characteristic_id, response);
+            }
+            PeripheralResponse::WriteCharacteristicCallStarted => {
+                self.view = View::Characteristic(ViewState::Scanning((
+                    Spinner::default(),
+                    String::from("Sending Write Request..."),
+                )))
+            }
+            PeripheralResponse::WriteCharacteristic => {}
+            PeripheralResponse::Error((response_type, err)) => {
+                match response_type {
+                    ResponseType::Peripheral => self.view = View::Peripheral(ViewState::Idle),
+                    ResponseType::Characteristic => {
+                        self.view = View::Characteristic(ViewState::Idle)
+                    }
+                }
+                self.error = Some(err);
             }
         };
         Ok(())
