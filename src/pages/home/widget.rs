@@ -380,8 +380,8 @@ impl<'a> DisplayWidget<'a> {
 
                 if let CharacteristicType::Unknown = characteristic.characteristic_type() {
                     lines.push(Line::from(vec![
-                        "Unknown Characteristic".into(),
-                        "cannot validate write data".into(),
+                        "Unknown Characteristic".red().bold(),
+                        "cannot validate write data".red().bold(),
                     ]));
                 }
 
