@@ -319,17 +319,21 @@ impl<'a> DisplayWidget<'a> {
                     .centered()
                     .render(descriptor_area, buf);
 
-                if characteristic.properties().contains(CharPropFlags::READ) {
-                    cmds.push(Line::from(vec![" Read: ".into(), " <r> ".blue().bold()]).centered());
-                } else if characteristic.properties().contains(CharPropFlags::NOTIFY) {
-                    cmds.push(
-                        Line::from(vec![" Notify: ".into(), " <n> ".blue().bold()]).centered(),
-                    );
-                } else if characteristic.properties().contains(CharPropFlags::WRITE) {
-                    cmds.push(
-                        Line::from(vec![" Write: ".into(), " <w> ".blue().bold()]).centered(),
-                    );
-                }
+                characteristic.properties().iter().for_each(|p| {
+                    if p.contains(CharPropFlags::READ) {
+                        cmds.push(
+                            Line::from(vec![" Read: ".into(), " <r> ".blue().bold()]).centered(),
+                        );
+                    } else if p.contains(CharPropFlags::NOTIFY) {
+                        cmds.push(
+                            Line::from(vec![" Notify: ".into(), " <n> ".blue().bold()]).centered(),
+                        );
+                    } else if p.contains(CharPropFlags::WRITE) {
+                        cmds.push(
+                            Line::from(vec![" Write: ".into(), " <w> ".blue().bold()]).centered(),
+                        );
+                    }
+                });
 
                 let view_specific_cmds = Text::from(cmds);
 

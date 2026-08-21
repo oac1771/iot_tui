@@ -50,7 +50,7 @@ pub enum PeripheralRequest {
     GetPheripherals,
     GetCharacteristics(PlatformPeripheral),
     Read((PlatformPeripheral, Uuid)),
-    Write((PlatformPeripheral, Uuid)),
+    Write((PlatformPeripheral, Uuid, Vec<u8>)),
 }
 
 #[derive(Debug)]
@@ -89,7 +89,7 @@ impl Peripherals {
                 PeripheralRequest::Read((peripheral, characteristic_id)) => {
                     Self::read_characteristic(central, tx, peripheral, characteristic_id).boxed()
                 }
-                PeripheralRequest::Write((peripheral, characteristic_id)) => async {
+                PeripheralRequest::Write((peripheral, characteristic_id, data)) => async {
                     println!("Handling write in central handler");
                     Ok(())
                 }
@@ -266,7 +266,7 @@ impl PeripheralsClient {
         characteristic_id: Uuid,
         data: &[u8],
     ) -> Result<(), String> {
-        let request = PeripheralRequest::Write((peripheral, characteristic_id));
+        let request = PeripheralRequest::Write((peripheral, characteristic_id, data.to_vec()));
         self.send_request(request).await?;
         Ok(())
     }
@@ -357,17 +357,7 @@ impl KnownCharacteristic {
     }
 
     pub fn validate_write_data(&self, data: &[u8]) -> Result<(), String> {
-        if let Some(descriptor) = self
-            .descriptors()
-            .filter_map(|d| {
-                if !d.validate_write_data(data) {
-                    Some(d)
-                } else {
-                    None
-                }
-            })
-            .next()
-        {
+        if let Some(descriptor) = self.descriptors().find(|d| !d.validate_write_data(data)) {
             Err(format!(
                 "Error validating write data for: {}",
                 descriptor.metadata()

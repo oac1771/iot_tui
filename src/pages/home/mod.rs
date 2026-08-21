@@ -158,6 +158,13 @@ impl Page for HomePage {
                             self.view = View::Characteristic(ViewState::Editing);
                         }
                     }
+                    KeyCode::Char('n') => {
+                        if let Some(characteristic) = self.state.get_indexed_characteristic()
+                            && characteristic.properties().contains(CharPropFlags::NOTIFY)
+                        {
+                            println!("Notify!")
+                        }
+                    }
                     _ => {}
                 },
                 View::Characteristic(ViewState::Payload(_)) => {

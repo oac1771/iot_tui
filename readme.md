@@ -1,1 +1,2 @@
-Finish write logic
+finish write logic
+do notify logic
