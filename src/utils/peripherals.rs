@@ -6,11 +6,11 @@ use iot_sdk::{
 use services::{
     Foo,
     health::{
-        HEALTH_PING_CHAR_UUID, HEALTH_STATUS_CHAR_UUID, HealthServicePingDescriptor,
-        HealthServiceStatusDescriptor,
+        HEALTH_PING_CHAR_UUID, HEALTH_PING_DESCRIPTOR_UUID, HEALTH_STATUS_CHAR_UUID,
+        HEALTH_STATUS_DESCRIPTOR_UUID, HealthServicePingDescriptor, HealthServiceStatusDescriptor,
     },
-    storage::{STORAGE_STATUS_CHAR_UUID, StorageServiceDataDescriptor},
-    trouble_host::types::gatt_traits::{AsGatt, FromGatt, FromGattError},
+    storage::{STORAGE_DATA_CHAR_UUID, STORAGE_DATA_DESCRIPTOR_UUID, StorageServiceDataDescriptor},
+    trouble_host::types::gatt_traits::AsGatt,
 };
 use std::pin::Pin;
 use tokio::{
@@ -158,15 +158,12 @@ impl Peripherals {
                 let mut raw_descriptors = Vec::new();
 
                 for descriptor in characteristic.descriptors.iter() {
-                    let raw_descriptor = select! {
-                        result = peripheral.read_descriptor(descriptor) => result.map_err(|e| e.to_string()),
-                        _ = sleep(Duration::from_secs(5)) => Err("Timed out reading characteristic descriptor".to_string())
-                    }?;
-
+                    let raw_descriptor = KnownDescriptor::from(descriptor.uuid);
                     raw_descriptors.push(raw_descriptor);
                 }
 
-                let known_characteristic = KnownCharacteristic::new(characteristic, raw_descriptors.into_iter());
+                let known_characteristic =
+                    KnownCharacteristic::new(characteristic, raw_descriptors);
                 known_characteristics.push(known_characteristic)
             }
 
@@ -333,16 +330,12 @@ pub enum CharacteristicType {
 }
 
 impl KnownCharacteristic {
-    pub fn new(characteristic: Characteristic, descriptors: impl Iterator<Item = Vec<u8>>) -> Self {
-        let descriptors = descriptors
-            .map(|descriptor_data| KnownDescriptor::from_gatt(&descriptor_data).unwrap())
-            .collect();
-
+    pub fn new(characteristic: Characteristic, descriptors: Vec<KnownDescriptor>) -> Self {
         let characteristic_type = if characteristic.uuid == HEALTH_STATUS_CHAR_UUID {
             CharacteristicType::Status
         } else if characteristic.uuid == HEALTH_PING_CHAR_UUID {
             CharacteristicType::Ping
-        } else if characteristic.uuid == STORAGE_STATUS_CHAR_UUID {
+        } else if characteristic.uuid == STORAGE_DATA_CHAR_UUID {
             CharacteristicType::Storage
         } else {
             CharacteristicType::Unknown
@@ -372,6 +365,11 @@ impl KnownCharacteristic {
     }
 
     pub fn to_inner_string(&self, data: &[u8]) -> Result<String, String> {
+        // let foo = self.descriptors.iter().filter_map(|d| {
+        //     match d {
+
+        //     }
+        // });
         match self.characteristic_type {
             CharacteristicType::Ping => Ok(String::from("foo bar")),
             CharacteristicType::Status => Ok(String::from("foo bar")),
@@ -412,7 +410,7 @@ pub enum KnownDescriptor {
     Status(HealthServiceStatusDescriptor),
     Ping(HealthServicePingDescriptor),
     Storage(StorageServiceDataDescriptor),
-    Unknown(Vec<u8>),
+    Unknown,
 }
 
 impl KnownDescriptor {
@@ -421,9 +419,7 @@ impl KnownDescriptor {
             KnownDescriptor::Ping(_) => String::from("Ping"),
             KnownDescriptor::Status(_) => String::from("Status"),
             KnownDescriptor::Storage(_) => String::from("Storage"),
-            KnownDescriptor::Unknown(d) => {
-                String::from_utf8(d.to_vec()).unwrap_or(String::from(""))
-            }
+            KnownDescriptor::Unknown => String::from("Unknown"),
         }
     }
 
@@ -432,23 +428,21 @@ impl KnownDescriptor {
             KnownDescriptor::Ping(d) => d.validate_write_data(data),
             KnownDescriptor::Status(d) => d.validate_write_data(data),
             KnownDescriptor::Storage(d) => d.validate_write_data(data),
-            KnownDescriptor::Unknown(_) => true,
+            KnownDescriptor::Unknown => true,
         }
     }
 }
 
-impl FromGatt for KnownDescriptor {
-    fn from_gatt(data: &[u8]) -> Result<Self, FromGattError> {
-        if data.is_empty() {
-            Ok(KnownDescriptor::Unknown(data.to_vec()))
-        } else if HealthServiceStatusDescriptor::from_gatt(data).is_ok() {
-            Ok(KnownDescriptor::Status(HealthServiceStatusDescriptor))
-        } else if HealthServicePingDescriptor::from_gatt(data).is_ok() {
-            Ok(KnownDescriptor::Ping(HealthServicePingDescriptor))
-        } else if HealthServicePingDescriptor::from_gatt(data).is_ok() {
-            Ok(KnownDescriptor::Storage(StorageServiceDataDescriptor))
+impl From<Uuid> for KnownDescriptor {
+    fn from(value: Uuid) -> Self {
+        if value == STORAGE_DATA_DESCRIPTOR_UUID {
+            Self::Storage(StorageServiceDataDescriptor)
+        } else if value == HEALTH_PING_DESCRIPTOR_UUID {
+            Self::Ping(HealthServicePingDescriptor)
+        } else if value == HEALTH_STATUS_DESCRIPTOR_UUID {
+            Self::Status(HealthServiceStatusDescriptor)
         } else {
-            Ok(KnownDescriptor::Unknown(data.to_vec()))
+            Self::Unknown
         }
     }
 }

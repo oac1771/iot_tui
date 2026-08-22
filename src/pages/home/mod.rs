@@ -268,9 +268,7 @@ impl Page for HomePage {
             PeripheralResponse::Error((response_type, err)) => {
                 match response_type {
                     ResponseType::Peripheral => self.view = View::Peripheral(ViewState::Idle),
-                    ResponseType::Characteristic => {
-                        self.view = View::Characteristic(ViewState::Idle)
-                    }
+                    ResponseType::Characteristic => self.view = View::Peripheral(ViewState::Idle),
                 }
                 self.error = Some(err);
             }
