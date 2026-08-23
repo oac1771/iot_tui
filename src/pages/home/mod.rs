@@ -162,7 +162,6 @@ impl Page for HomePage {
                         if let Some(characteristic) = self.state.get_indexed_characteristic()
                             && characteristic.properties().contains(CharPropFlags::NOTIFY)
                         {
-                            println!("Notify!")
                         }
                     }
                     _ => {}

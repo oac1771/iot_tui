@@ -166,7 +166,7 @@ impl<'a> DisplayWidget<'a> {
             .split(inner);
         let center_area = layout[1];
 
-        match characteristic.to_inner_string(response) {
+        match characteristic.handle_response(response) {
             Ok(response) => {
                 let text = Text::from(response);
                 let paragraph = Paragraph::new(text).alignment(Alignment::Center);
@@ -455,9 +455,10 @@ impl<'a> Widget for PopUpErrorWidget<'a> {
             .title_bottom(instructions.centered());
 
         let popup_area = popup_area(area, 80, 80);
+        let lines: Vec<Line> = self.error.split('\n').map(Line::from).collect();
 
         Clear::render(Clear, popup_area, buf);
-        Paragraph::new(Line::raw(self.error))
+        Paragraph::new(lines)
             .block(block.clone())
             .red()
             .centered()

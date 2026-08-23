@@ -155,15 +155,13 @@ impl Peripherals {
             let mut known_characteristics = Vec::new();
 
             for characteristic in peripheral.characteristics().into_iter() {
-                let mut raw_descriptors = Vec::new();
+                let c = characteristic.clone();
+                let descriptors = c
+                    .descriptors
+                    .iter()
+                    .filter_map(|d| KnownDescriptor::try_from(d.uuid).ok());
 
-                for descriptor in characteristic.descriptors.iter() {
-                    let raw_descriptor = KnownDescriptor::from(descriptor.uuid);
-                    raw_descriptors.push(raw_descriptor);
-                }
-
-                let known_characteristic =
-                    KnownCharacteristic::new(characteristic, raw_descriptors);
+                let known_characteristic = KnownCharacteristic::new(characteristic, descriptors);
                 known_characteristics.push(known_characteristic)
             }
 
@@ -330,7 +328,10 @@ pub enum CharacteristicType {
 }
 
 impl KnownCharacteristic {
-    pub fn new(characteristic: Characteristic, descriptors: Vec<KnownDescriptor>) -> Self {
+    pub fn new(
+        characteristic: Characteristic,
+        descriptors: impl Iterator<Item = KnownDescriptor>,
+    ) -> Self {
         let characteristic_type = if characteristic.uuid == HEALTH_STATUS_CHAR_UUID {
             CharacteristicType::Status
         } else if characteristic.uuid == HEALTH_PING_CHAR_UUID {
@@ -343,7 +344,7 @@ impl KnownCharacteristic {
 
         Self {
             characteristic,
-            descriptors,
+            descriptors: descriptors.collect(),
             characteristic_type,
         }
     }
@@ -364,21 +365,18 @@ impl KnownCharacteristic {
         self.characteristic.uuid
     }
 
-    pub fn to_inner_string(&self, data: &[u8]) -> Result<String, String> {
-        // let foo = self.descriptors.iter().filter_map(|d| {
-        //     match d {
-
-        //     }
-        // });
-        match self.characteristic_type {
-            CharacteristicType::Ping => Ok(String::from("foo bar")),
-            CharacteristicType::Status => Ok(String::from("foo bar")),
-            CharacteristicType::Storage => Ok(String::from("foo bar")),
-            CharacteristicType::Unknown => {
-                let inner = String::from_utf8(data.to_vec())
-                    .map_err(|_| format!("Unable to deserialize: {:?}", data))?;
-                Ok(inner)
-            }
+    pub fn handle_response(&self, data: &[u8]) -> Result<String, String> {
+        if let Some(response) = self
+            .descriptors
+            .iter()
+            .filter_map(|d| d.handle_response(data).ok())
+            .next()
+        {
+            Ok(response)
+        } else if let Ok(response) = String::from_utf8(data.to_vec()) {
+            Ok(response)
+        } else {
+            Err(format!("Unable to deserialize response from: {:?}", data))
         }
     }
 
@@ -394,14 +392,17 @@ impl KnownCharacteristic {
     }
 
     pub fn validate_write_data(&self, data: &[u8]) -> Result<(), String> {
-        if let Some(descriptor) = self.descriptors().find(|d| !d.validate_write_data(data)) {
-            Err(format!(
-                "Error validating write data for: {}",
-                descriptor.metadata()
-            ))
-        } else {
-            Ok(())
+        for descriptor in self.descriptors() {
+            if descriptor.validate_write_data(data) {
+                return Ok(());
+            }
         }
+
+        return Err(format!(
+            "Could not validate write data: {:?}\nDescriptor: {:?}",
+            data,
+            self.descriptors().collect::<Vec<&KnownDescriptor>>()
+        ));
     }
 }
 
@@ -410,16 +411,14 @@ pub enum KnownDescriptor {
     Status(HealthServiceStatusDescriptor),
     Ping(HealthServicePingDescriptor),
     Storage(StorageServiceDataDescriptor),
-    Unknown,
 }
 
 impl KnownDescriptor {
     pub fn metadata(&self) -> String {
         match self {
-            KnownDescriptor::Ping(_) => String::from("Ping"),
-            KnownDescriptor::Status(_) => String::from("Status"),
-            KnownDescriptor::Storage(_) => String::from("Storage"),
-            KnownDescriptor::Unknown => String::from("Unknown"),
+            KnownDescriptor::Ping(d) => format!("Ping: {:?}", d.id()),
+            KnownDescriptor::Status(d) => format!("Status: {:?}", d.id()),
+            KnownDescriptor::Storage(d) => format!("Storage: {:?}", d.id()),
         }
     }
 
@@ -428,21 +427,39 @@ impl KnownDescriptor {
             KnownDescriptor::Ping(d) => d.validate_write_data(data),
             KnownDescriptor::Status(d) => d.validate_write_data(data),
             KnownDescriptor::Storage(d) => d.validate_write_data(data),
-            KnownDescriptor::Unknown => true,
+        }
+    }
+
+    pub fn handle_response(&self, data: &[u8]) -> Result<String, String> {
+        match self {
+            KnownDescriptor::Ping(d) => d
+                .deserialize_response(data)
+                .map(|i| i.to_string())
+                .map_err(|e| format!("{:?}", e)),
+            KnownDescriptor::Status(d) => d
+                .deserialize_response(data)
+                .map(|i| i.to_string())
+                .map_err(|e| format!("{:?}", e)),
+            KnownDescriptor::Storage(d) => d
+                .deserialize_response(data)
+                .map(|i| i.to_string())
+                .map_err(|e| format!("{:?}", e)),
         }
     }
 }
 
-impl From<Uuid> for KnownDescriptor {
-    fn from(value: Uuid) -> Self {
+impl TryFrom<Uuid> for KnownDescriptor {
+    type Error = String;
+
+    fn try_from(value: Uuid) -> Result<Self, Self::Error> {
         if value == STORAGE_DATA_DESCRIPTOR_UUID {
-            Self::Storage(StorageServiceDataDescriptor)
+            Ok(Self::Storage(StorageServiceDataDescriptor))
         } else if value == HEALTH_PING_DESCRIPTOR_UUID {
-            Self::Ping(HealthServicePingDescriptor)
+            Ok(Self::Ping(HealthServicePingDescriptor))
         } else if value == HEALTH_STATUS_DESCRIPTOR_UUID {
-            Self::Status(HealthServiceStatusDescriptor)
+            Ok(Self::Status(HealthServiceStatusDescriptor))
         } else {
-            Self::Unknown
+            Err(String::from("Not known descriptor"))
         }
     }
 }
