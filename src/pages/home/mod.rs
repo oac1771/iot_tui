@@ -181,16 +181,17 @@ impl Page for HomePage {
                         let write_data = self.state.input.value.clone();
                         self.state.input.value.clear();
                         self.reset_cursor();
-                        let data = write_data.as_bytes();
 
                         if let Some(characteristic) = self.state.get_indexed_characteristic() {
-                            if let Err(err) = characteristic.validate_write_data(data) {
-                                self.error = Some(err);
-                            } else {
-                                let peripheral = self.state.get_indexed_peripheral();
-                                self.peripherals_client
-                                    .write(peripheral.clone(), characteristic.id(), data)
-                                    .await?;
+
+                            match characteristic.validate_write_data(write_data) {
+                                Ok(data) => {
+                                    let peripheral = self.state.get_indexed_peripheral();
+                                    self.peripherals_client
+                                        .write(peripheral.clone(), characteristic.id(), &data)
+                                        .await?;
+                                },
+                                Err(err) => self.error = Some(err)
                             }
                         }
                     }

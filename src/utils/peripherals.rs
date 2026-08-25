@@ -391,10 +391,11 @@ impl KnownCharacteristic {
         }
     }
 
-    pub fn validate_write_data(&self, data: &[u8]) -> Result<(), String> {
+    pub fn validate_write_data(&self, data: String) -> Result<Vec<u8>, String> {
+
         for descriptor in self.descriptors() {
-            if descriptor.validate_write_data(data) {
-                return Ok(());
+            if let Ok(write_data) = descriptor.validate_write_data(&data) {
+                return Ok(write_data);
             }
         }
 
@@ -422,26 +423,30 @@ impl KnownDescriptor {
         }
     }
 
-    fn validate_write_data(&self, data: &[u8]) -> bool {
+    fn validate_write_data(&self, data: &str) -> Result<Vec<u8>, String> {
         match self {
-            KnownDescriptor::Ping(d) => d.validate_write_data(data),
-            KnownDescriptor::Status(d) => d.validate_write_data(data),
-            KnownDescriptor::Storage(d) => d.validate_write_data(data),
+            KnownDescriptor::Ping(d) => Ok(d.serialize_write_data(()).as_gatt().to_vec()),
+            KnownDescriptor::Status(d) => Ok(d.serialize_write_data(()).as_gatt().to_vec()),
+            KnownDescriptor::Storage(d) => {
+                let write_data = string_to_u8_bytes(&data).map_err(|e| e.to_string())?;
+                
+                Ok(d.serialize_write_data(write_data).as_gatt().to_vec()) 
+            }
         }
     }
 
     pub fn handle_response(&self, data: &[u8]) -> Result<String, String> {
         match self {
             KnownDescriptor::Ping(d) => d
-                .deserialize_response(data)
+                .deserialize_read_response(data)
                 .map(|i| i.to_string())
                 .map_err(|e| format!("{:?}", e)),
             KnownDescriptor::Status(d) => d
-                .deserialize_response(data)
+                .deserialize_read_response(data)
                 .map(|i| i.to_string())
                 .map_err(|e| format!("{:?}", e)),
             KnownDescriptor::Storage(d) => d
-                .deserialize_response(data)
+                .deserialize_read_response(data)
                 .map(|i| i.to_string())
                 .map_err(|e| format!("{:?}", e)),
         }
@@ -471,4 +476,10 @@ impl AsGatt for KnownDescriptor {
     fn as_gatt(&self) -> &[u8] {
         &[]
     }
+}
+
+
+fn string_to_u8_bytes(input: &str) -> Result<[u8; 1], std::num::ParseIntError> {
+    let value: u8 = input.parse()?;
+    Ok(value.to_le_bytes())
 }
