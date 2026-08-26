@@ -212,10 +212,10 @@ impl Page for HomePage {
                     }
                     _ => {}
                 },
-                View::Characteristic(ViewState::Notifying(notification_rx)) => {
-                    let mut notification_rx = notification_rx.resubscribe();
-                    let foo = notification_rx.recv().await.unwrap();
-                    println!("{:?}", foo.value);
+                View::Characteristic(ViewState::Notifying(_)) => {
+                    if key_event.code == KeyCode::Esc {
+                        self.view = View::Characteristic(ViewState::Idle)
+                    }
                 }
                 _ => {}
             }

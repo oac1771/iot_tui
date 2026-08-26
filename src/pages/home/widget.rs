@@ -191,42 +191,55 @@ impl<'a> DisplayWidget<'a> {
             .border_set(border::DOUBLE)
             .title_top(Line::from(" Characteristics ").centered());
 
-        if let View::Peripheral(ViewState::Scanning((spinner, scanning_message))) = self.view {
-            self.render_peripheral_scan_spinner(
-                left_area,
-                buf,
-                spinner,
-                &peripheral_block,
-                scanning_message,
-            )
-        } else if !self.state.get_local_names().is_empty() {
-            self.render_peripheral_names(left_area, buf, &peripheral_block)
+        match self.view {
+            View::Peripheral(view_state) => match view_state {
+                ViewState::Scanning((spinner, scanning_message)) => self
+                    .render_peripheral_scan_spinner(
+                        left_area,
+                        buf,
+                        spinner,
+                        &peripheral_block,
+                        scanning_message,
+                    ),
+                ViewState::Idle => self.render_peripheral_names(left_area, buf, &peripheral_block),
+                _ => {}
+            },
+            _ => self.render_peripheral_names(left_area, buf, &peripheral_block),
         }
 
-        if let View::Characteristic(ViewState::Scanning((spinner, scanning_message))) = self.view {
-            self.render_characteristic_scan_spinner(
-                right_area,
-                buf,
-                spinner,
-                &characteristic_block,
-                scanning_message,
-            )
-        } else if let View::Characteristic(ViewState::Payload(characteristic_id)) = self.view {
-            if let Some(characteristic) = self.state.get_characteristic(characteristic_id)
-                && let Some(response) = self.state.get_characteristic_response(characteristic_id)
-                && let Err(err) = self.render_characteristic_response(
-                    right_area,
-                    buf,
-                    &characteristic_block,
-                    response.data(),
-                    characteristic,
-                )
-            {
-                let error = PopUpErrorWidget::new(&err);
-                error.render(right_area, buf);
-            }
-        } else if self.state.get_characteristics().is_some() {
-            self.render_characteristics(right_area, buf, &characteristic_block)
+        match self.view {
+            View::Characteristic(view_state) => match view_state {
+                ViewState::Scanning((spinner, scanning_message)) => self
+                    .render_characteristic_scan_spinner(
+                        right_area,
+                        buf,
+                        spinner,
+                        &characteristic_block,
+                        scanning_message,
+                    ),
+                ViewState::Payload(characteristic_id) => {
+                    if let Some(characteristic) = self.state.get_characteristic(characteristic_id)
+                        && let Some(response) =
+                            self.state.get_characteristic_response(characteristic_id)
+                        && let Err(err) = self.render_characteristic_response(
+                            right_area,
+                            buf,
+                            &characteristic_block,
+                            response.data(),
+                            characteristic,
+                        )
+                    {
+                        let error = PopUpErrorWidget::new(&err);
+                        error.render(right_area, buf);
+                    }
+                }
+                ViewState::Notifying(notification_rx) => {}
+                ViewState::Idle => {
+                    self.render_characteristics(right_area, buf, &characteristic_block)
+                }
+                _ => {}
+            },
+            _ => self.render_characteristics(right_area, buf, &characteristic_block),
         }
 
         peripheral_block.render(left_area, buf);
