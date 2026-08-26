@@ -392,18 +392,17 @@ impl KnownCharacteristic {
     }
 
     pub fn validate_write_data(&self, data: String) -> Result<Vec<u8>, String> {
-
         for descriptor in self.descriptors() {
             if let Ok(write_data) = descriptor.validate_write_data(&data) {
                 return Ok(write_data);
             }
         }
 
-        return Err(format!(
+        Err(format!(
             "Could not validate write data: {:?}\nDescriptor: {:?}",
             data,
             self.descriptors().collect::<Vec<&KnownDescriptor>>()
-        ));
+        ))
     }
 }
 
@@ -428,9 +427,9 @@ impl KnownDescriptor {
             KnownDescriptor::Ping(d) => Ok(d.serialize_write_data(()).as_gatt().to_vec()),
             KnownDescriptor::Status(d) => Ok(d.serialize_write_data(()).as_gatt().to_vec()),
             KnownDescriptor::Storage(d) => {
-                let write_data = string_to_u8_bytes(&data).map_err(|e| e.to_string())?;
-                
-                Ok(d.serialize_write_data(write_data).as_gatt().to_vec()) 
+                let write_data = string_to_u8_bytes(data).map_err(|e| e.to_string())?;
+
+                Ok(d.serialize_write_data(write_data).as_gatt().to_vec())
             }
         }
     }
@@ -477,7 +476,6 @@ impl AsGatt for KnownDescriptor {
         &[]
     }
 }
-
 
 fn string_to_u8_bytes(input: &str) -> Result<[u8; 1], std::num::ParseIntError> {
     let value: u8 = input.parse()?;

@@ -183,15 +183,14 @@ impl Page for HomePage {
                         self.reset_cursor();
 
                         if let Some(characteristic) = self.state.get_indexed_characteristic() {
-
                             match characteristic.validate_write_data(write_data) {
                                 Ok(data) => {
                                     let peripheral = self.state.get_indexed_peripheral();
                                     self.peripherals_client
                                         .write(peripheral.clone(), characteristic.id(), &data)
                                         .await?;
-                                },
-                                Err(err) => self.error = Some(err)
+                                }
+                                Err(err) => self.error = Some(err),
                             }
                         }
                     }
