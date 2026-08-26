@@ -11,9 +11,10 @@ use crate::{
 
 use super::Page;
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind};
-use iot_sdk::{CharPropFlags, Uuid};
+use iot_sdk::{CharPropFlags, Uuid, ValueNotification};
 use ratatui::widgets::Widget;
 use state::State;
+use tokio::sync::broadcast::Receiver;
 
 pub struct HomePage {
     state: State,
@@ -32,6 +33,7 @@ enum ViewState {
     Scanning((Spinner, String)),
     Payload(Uuid),
     Editing,
+    Notifying(Receiver<ValueNotification>),
 }
 
 impl HomePage {
@@ -119,7 +121,7 @@ impl Page for HomePage {
 
     async fn handle_key_event(&mut self, key_event: &KeyEvent) -> Result<(), String> {
         if key_event.kind == KeyEventKind::Press && self.error.is_none() {
-            match self.view {
+            match &self.view {
                 View::Peripheral(ViewState::Idle) => match key_event.code {
                     KeyCode::Char('s') => {
                         self.peripherals_client.get_peripherals().await?;
@@ -162,6 +164,20 @@ impl Page for HomePage {
                         if let Some(characteristic) = self.state.get_indexed_characteristic()
                             && characteristic.properties().contains(CharPropFlags::NOTIFY)
                         {
+                            let peripheral = self.state.get_indexed_peripheral();
+
+                            let result = self
+                                .peripherals_client
+                                .notify(peripheral.clone(), characteristic.id())
+                                .await;
+
+                            match result {
+                                Ok(notification_rx) => {
+                                    self.view =
+                                        View::Characteristic(ViewState::Notifying(notification_rx))
+                                }
+                                Err(err) => self.error = Some(err),
+                            }
                         }
                     }
                     _ => {}
@@ -196,6 +212,11 @@ impl Page for HomePage {
                     }
                     _ => {}
                 },
+                View::Characteristic(ViewState::Notifying(notification_rx)) => {
+                    let mut notification_rx = notification_rx.resubscribe();
+                    let foo = notification_rx.recv().await.unwrap();
+                    println!("{:?}", foo.value);
+                }
                 _ => {}
             }
         } else if key_event.kind == KeyEventKind::Press

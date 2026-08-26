@@ -1,7 +1,8 @@
 use futures::FutureExt;
 use futures_util::StreamExt;
 use iot_sdk::{
-    CharPropFlags, Characteristic, Peripheral, PlatformPeripheral, Uuid, central::Central,
+    CharPropFlags, Characteristic, Peripheral, PlatformPeripheral, Uuid, ValueNotification,
+    central::Central,
 };
 use services::{
     Foo,
@@ -15,7 +16,10 @@ use services::{
 use std::pin::Pin;
 use tokio::{
     select,
-    sync::mpsc::{self, Receiver, Sender},
+    sync::{
+        broadcast,
+        mpsc::{self, Receiver, Sender},
+    },
     time::{Duration, sleep},
 };
 
@@ -51,6 +55,13 @@ pub enum PeripheralRequest {
     GetCharacteristics(PlatformPeripheral),
     Read((PlatformPeripheral, Uuid)),
     Write((PlatformPeripheral, Uuid, Vec<u8>)),
+    Notify(
+        (
+            PlatformPeripheral,
+            Uuid,
+            broadcast::Sender<ValueNotification>,
+        ),
+    ),
 }
 
 #[derive(Debug)]
@@ -99,6 +110,16 @@ impl Peripherals {
                 PeripheralRequest::Write((peripheral, characteristic_id, data)) => {
                     Self::write_characteristic(central, tx, peripheral, characteristic_id, data)
                         .boxed()
+                }
+                PeripheralRequest::Notify((peripheral, characteristic_id, notify_tx)) => {
+                    Self::notify_characteristic(
+                        central,
+                        tx,
+                        peripheral,
+                        characteristic_id,
+                        notify_tx,
+                    )
+                    .boxed()
                 }
             };
 
@@ -263,6 +284,41 @@ impl Peripherals {
 
         Ok(())
     }
+
+    async fn notify_characteristic(
+        central: Central,
+        tx: Sender<PeripheralResponse>,
+        peripheral: PlatformPeripheral,
+        characteristic_id: Uuid,
+        notify_tx: broadcast::Sender<ValueNotification>,
+    ) -> Result<(), String> {
+        let result = async {
+
+            let notification_stream = select! {
+                result = central.subscribe(&peripheral, characteristic_id) => result.map_err(|e| e.to_string()),
+                _ = sleep(Duration::from_secs(5)) => Err(String::from("Timed out subscribing to characteristic notifications"))
+            }?;
+
+            tokio::pin!(notification_stream);
+
+            while let Some(notification) = notification_stream.next().await {
+                if let Err(err) = notify_tx.send(notification) {
+                    return Err(err.to_string())
+                }
+            }
+
+            Ok(())
+        }
+        .await;
+
+        if let Err(err) = result.map_err(|e| (ResponseType::Characteristic, e)) {
+            tx.send(PeripheralResponse::Error(err))
+                .await
+                .map_err(|e| e.to_string())?;
+        }
+
+        Ok(())
+    }
 }
 
 impl PeripheralsClient {
@@ -303,6 +359,19 @@ impl PeripheralsClient {
         let request = PeripheralRequest::Write((peripheral, characteristic_id, data.to_vec()));
         self.send_request(request).await?;
         Ok(())
+    }
+
+    pub async fn notify(
+        &self,
+        peripheral: PlatformPeripheral,
+        characteristic_id: Uuid,
+    ) -> Result<broadcast::Receiver<ValueNotification>, String> {
+        let (notify_tx, notify_rx) = broadcast::channel(100);
+
+        let request = PeripheralRequest::Notify((peripheral, characteristic_id, notify_tx));
+        self.send_request(request).await?;
+
+        Ok(notify_rx)
     }
 
     async fn send_request(&self, request: PeripheralRequest) -> Result<(), String> {
