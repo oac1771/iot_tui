@@ -264,7 +264,9 @@ impl Page for HomePage {
                     String::from("Sending Write Request..."),
                 )))
             }
-            PeripheralResponse::WriteCharacteristic => {}
+            PeripheralResponse::WriteCharacteristic => {
+                self.view = View::Characteristic(ViewState::Idle);
+            }
             PeripheralResponse::Error((response_type, err)) => {
                 match response_type {
                     ResponseType::Peripheral => self.view = View::Peripheral(ViewState::Idle),
