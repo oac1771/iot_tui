@@ -1,2 +1,1 @@
-finish write logic
-do notify logic
+try using std sync_channel for sending/receiving notifications

@@ -13,11 +13,10 @@ use services::{
     storage::{STORAGE_DATA_CHAR_UUID, STORAGE_DATA_DESCRIPTOR_UUID, StorageServiceDataDescriptor},
     trouble_host::types::gatt_traits::AsGatt,
 };
-use std::pin::Pin;
+use std::{sync::mpsc::{self as std_mpsc}, pin::Pin};
 use tokio::{
     select,
     sync::{
-        broadcast,
         mpsc::{self, Receiver, Sender},
     },
     time::{Duration, sleep},
@@ -59,7 +58,7 @@ pub enum PeripheralRequest {
         (
             PlatformPeripheral,
             Uuid,
-            broadcast::Sender<ValueNotification>,
+            std_mpsc::SyncSender<ValueNotification>,
         ),
     ),
 }
@@ -290,7 +289,7 @@ impl Peripherals {
         tx: Sender<PeripheralResponse>,
         peripheral: PlatformPeripheral,
         characteristic_id: Uuid,
-        notify_tx: broadcast::Sender<ValueNotification>,
+        notify_tx: std_mpsc::SyncSender<ValueNotification>,
     ) -> Result<(), String> {
         let result = async {
 
@@ -365,8 +364,8 @@ impl PeripheralsClient {
         &self,
         peripheral: PlatformPeripheral,
         characteristic_id: Uuid,
-    ) -> Result<broadcast::Receiver<ValueNotification>, String> {
-        let (notify_tx, notify_rx) = broadcast::channel(100);
+    ) -> Result<std_mpsc::Receiver<ValueNotification>, String> {
+        let (notify_tx, notify_rx) = std_mpsc::sync_channel(100);
 
         let request = PeripheralRequest::Notify((peripheral, characteristic_id, notify_tx));
         self.send_request(request).await?;

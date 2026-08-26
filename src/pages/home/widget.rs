@@ -1,3 +1,5 @@
+use std::sync::mpsc::TryRecvError;
+
 use crate::{
     pages::home::{View, ViewState, state::State},
     utils::{
@@ -177,6 +179,50 @@ impl<'a> DisplayWidget<'a> {
         }
     }
 
+    fn render_notification_response(
+        &self,
+        area: Rect,
+        buf: &mut Buffer,
+        block: &Block,
+        data: &[u8],
+        characteristic: &KnownCharacteristic,
+    ) -> Result<(), String> {
+        let inner = block.inner(area);
+        let layout = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Percentage(50),
+                Constraint::Length(3),
+                Constraint::Percentage(50),
+            ])
+            .split(inner);
+        let center_area = layout[1];
+
+        let lines = vec![
+            Line::from(vec![
+                format!("Data: {:?}", data).into(),
+            ]),
+        ];
+
+        let text = Text::from(lines);
+
+        let payload_block = Block::bordered()
+            .border_set(border::DOUBLE)
+            .border_style(Style::new().light_blue())
+            .title_top(
+                Line::from("  Notifications  ")
+                    .style(Style::new().light_blue())
+                    .centered(),
+            );
+
+        Paragraph::new(text)
+            .block(payload_block)
+            .render(center_area, buf);
+
+        Ok(())
+
+    }
+
     fn render_mid_area(&self, area: Rect, buf: &mut Buffer) {
         let layout = Layout::default()
             .direction(Direction::Horizontal)
@@ -233,7 +279,44 @@ impl<'a> DisplayWidget<'a> {
                         error.render(right_area, buf);
                     }
                 }
-                ViewState::Notifying(notification_rx) => {}
+                ViewState::Notifying(notification_rx) => {
+
+                    if let Some(characteristic) = self.state.get_indexed_characteristic() {
+                        let entries: Vec<String> = Vec::new();
+
+                        // maybe dont loop here so outside event loop can handle Esc stroke
+                        loop {
+                            match notification_rx.try_recv() {
+                                Ok(value) => {
+                                    if let Err(err) = self.render_notification_response(
+                                        right_area,
+                                        buf,
+                                        &characteristic_block,
+                                        &value.value,
+                                        characteristic,
+                                    ) {
+                                        let error = PopUpErrorWidget::new(&err);
+                                        error.render(right_area, buf);
+                                        break
+                                    }
+                                }
+                                Err(TryRecvError::Empty) => {
+                                    // need to render empty notification message
+                                    let err = String::from("");
+                                    let error = PopUpErrorWidget::new(&err);
+                                    error.render(right_area, buf);
+                                    continue
+                                }
+                                Err(TryRecvError::Disconnected) => {
+                                    let err = format!("Disconnected from notification stream");
+                                    let error = PopUpErrorWidget::new(&err);
+                                    error.render(right_area, buf);
+                                    break
+                                }
+                            }
+                        }
+                    }
+                }
                 ViewState::Idle => {
                     self.render_characteristics(right_area, buf, &characteristic_block)
                 }

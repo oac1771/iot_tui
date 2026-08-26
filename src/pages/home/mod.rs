@@ -14,7 +14,7 @@ use crossterm::event::{KeyCode, KeyEvent, KeyEventKind};
 use iot_sdk::{CharPropFlags, Uuid, ValueNotification};
 use ratatui::widgets::Widget;
 use state::State;
-use tokio::sync::broadcast::Receiver;
+use std::sync::mpsc::{self as std_mpsc};
 
 pub struct HomePage {
     state: State,
@@ -33,7 +33,7 @@ enum ViewState {
     Scanning((Spinner, String)),
     Payload(Uuid),
     Editing,
-    Notifying(Receiver<ValueNotification>),
+    Notifying(std_mpsc::Receiver<ValueNotification>),
 }
 
 impl HomePage {
