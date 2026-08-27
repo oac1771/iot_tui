@@ -6,7 +6,7 @@ use ratatui::widgets::Widget;
 use crate::utils::peripherals::PeripheralResponse;
 
 pub trait Page {
-    fn generate_widget(&self) -> impl Widget;
+    fn generate_widget(&mut self) -> impl Widget;
 
     fn tick(&mut self) -> impl Future<Output = Result<(), String>>;
 

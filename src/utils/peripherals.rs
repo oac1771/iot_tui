@@ -1,3 +1,4 @@
+use crossbeam::channel::{self, bounded};
 use futures::FutureExt;
 use futures_util::StreamExt;
 use iot_sdk::{
@@ -13,15 +14,12 @@ use services::{
     storage::{STORAGE_DATA_CHAR_UUID, STORAGE_DATA_DESCRIPTOR_UUID, StorageServiceDataDescriptor},
     trouble_host::types::gatt_traits::AsGatt,
 };
-use std::{
-    pin::Pin,
-};
+use std::pin::Pin;
 use tokio::{
     select,
     sync::mpsc::{self, Receiver, Sender},
     time::{Duration, sleep},
 };
-use crossbeam::channel::{self, bounded};
 
 pub async fn init() -> Result<(PeripheralsInit, PeripheralsClient), String> {
     let peripherals = Peripherals::new().await?;
@@ -55,13 +53,7 @@ pub enum PeripheralRequest {
     GetCharacteristics(PlatformPeripheral),
     Read((PlatformPeripheral, Uuid)),
     Write((PlatformPeripheral, Uuid, Vec<u8>)),
-    Notify(
-        (
-            PlatformPeripheral,
-            Uuid,
-            channel::Sender<ValueNotification>,
-        ),
-    ),
+    Notify((PlatformPeripheral, Uuid, channel::Sender<ValueNotification>)),
 }
 
 #[derive(Debug)]

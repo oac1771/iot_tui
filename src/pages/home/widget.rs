@@ -15,7 +15,7 @@ use ratatui::{
     widgets::{Block, Clear, List, ListItem, ListState, Paragraph, StatefulWidget, Widget, Wrap},
 };
 
-use crossbeam::channel::TryRecvError;
+// use crossbeam::channel::TryRecvError;
 
 pub enum HomeWidget<'a> {
     PopUpError(PopUpErrorWidget<'a>),
@@ -33,17 +33,17 @@ impl<'a> Widget for HomeWidget<'a> {
 
 pub struct DisplayWidget<'a> {
     state: &'a State,
-    view: View,
+    view: &'a mut View,
 }
 
 impl<'a> DisplayWidget<'a> {
-    pub fn new(state: &'a State, view: View) -> Self {
+    pub fn new(state: &'a State, view: &'a mut View) -> Self {
         Self { state, view }
     }
 
-    fn render_peripheral_names(state: &State, area: Rect, buf: &mut Buffer, block: &Block) {
-        let local_names = state.get_local_names();
-        let index = state.get_peripheral_index();
+    fn render_peripheral_names(&mut self, area: Rect, buf: &mut Buffer, block: &Block) {
+        let local_names = self.state.get_local_names();
+        let index = self.state.get_peripheral_index();
 
         let scan_list: Vec<ListItem> = local_names
             .iter()
@@ -63,14 +63,9 @@ impl<'a> DisplayWidget<'a> {
         );
     }
 
-    fn render_characteristics(
-        state: &State,
-        view: &View,
-        area: Rect,
-        buf: &mut Buffer,
-        block: &Block,
-    ) {
-        let characteristic_entries = state
+    fn render_characteristics(&mut self, area: Rect, buf: &mut Buffer, block: &Block) {
+        let characteristic_entries = self
+            .state
             .get_characteristics()
             .unwrap_or(&vec![])
             .iter()
@@ -81,13 +76,13 @@ impl<'a> DisplayWidget<'a> {
             })
             .collect::<Vec<ListItem>>();
 
-        let index = state.get_characteristic_index();
+        let index = self.state.get_characteristic_index();
         let mut characteristic_list_state = ListState::default();
         characteristic_list_state.select(Some(index));
 
         let mut list = List::new(characteristic_entries).block(block.clone());
 
-        if let View::Characteristic(ViewState::Idle) = view {
+        if let View::Characteristic(ViewState::Idle) = self.view {
             list = list.highlight_style(Style::new().bold().magenta());
         };
 
@@ -219,7 +214,7 @@ impl<'a> DisplayWidget<'a> {
         Ok(())
     }
 
-    fn render_mid_area(state: &State, view: &mut View, area: Rect, buf: &mut Buffer) {
+    fn render_mid_area(&mut self, area: Rect, buf: &mut Buffer) {
         let layout = Layout::default()
             .direction(Direction::Horizontal)
             .constraints(vec![Constraint::Percentage(40), Constraint::Percentage(60)]);
@@ -233,7 +228,7 @@ impl<'a> DisplayWidget<'a> {
             .border_set(border::DOUBLE)
             .title_top(Line::from(" Characteristics ").centered());
 
-        match view {
+        match self.view {
             View::Peripheral(view_state) => match view_state {
                 ViewState::Scanning((spinner, scanning_message)) => {
                     Self::render_peripheral_scan_spinner(
@@ -244,15 +239,13 @@ impl<'a> DisplayWidget<'a> {
                         scanning_message,
                     )
                 }
-                ViewState::Idle => {
-                    Self::render_peripheral_names(state, left_area, buf, &peripheral_block)
-                }
+                ViewState::Idle => self.render_peripheral_names(left_area, buf, &peripheral_block),
                 _ => {}
             },
-            _ => Self::render_peripheral_names(state, left_area, buf, &peripheral_block),
+            _ => self.render_peripheral_names(left_area, buf, &peripheral_block),
         }
 
-        match view {
+        match self.view {
             View::Characteristic(view_state) => match view_state {
                 ViewState::Scanning((spinner, scanning_message)) => {
                     Self::render_characteristic_scan_spinner(
@@ -264,8 +257,9 @@ impl<'a> DisplayWidget<'a> {
                     )
                 }
                 ViewState::Payload(characteristic_id) => {
-                    if let Some(characteristic) = state.get_characteristic(characteristic_id)
-                        && let Some(response) = state.get_characteristic_response(characteristic_id)
+                    if let Some(characteristic) = self.state.get_characteristic(characteristic_id)
+                        && let Some(response) =
+                            self.state.get_characteristic_response(characteristic_id)
                         && let Err(err) = Self::render_characteristic_response(
                             right_area,
                             buf,
@@ -278,53 +272,49 @@ impl<'a> DisplayWidget<'a> {
                         error.render(right_area, buf);
                     }
                 }
-                ViewState::Notifying((notification_rx, notifications)) => {
-                    if let Some(characteristic) = state.get_indexed_characteristic() {
-                        notifications.push(String::from("notification..."));
+                ViewState::Notifying((_notification_rx, _notifications)) => {
+                    if let Some(_characteristic) = self.state.get_indexed_characteristic() {
+                        // notifications.push(String::from("notification..."));
 
-                        match notification_rx.try_recv() {
-                            Ok(value) => {
-                                if let Err(err) = Self::render_notification_response(
-                                    right_area,
-                                    buf,
-                                    &characteristic_block,
-                                    &value.value,
-                                    characteristic,
-                                ) {
-                                    let error = PopUpErrorWidget::new(&err);
-                                    error.render(right_area, buf);
-                                }
-                            }
-                            Err(TryRecvError::Empty) => {
-                                let err = String::from("Empty");
-                                let error = PopUpErrorWidget::new(&err);
-                                error.render(right_area, buf);
-                            }
-                            Err(TryRecvError::Disconnected) => {
-                                let err = String::from("Disconnected from notification stream");
-                                let error = PopUpErrorWidget::new(&err);
-                                error.render(right_area, buf);
-                            }
-                        }
+                        // let result = match notification_rx.try_recv() {
+                        //     Ok(value) => {
+                        //         String::from("Value")
+                        //     }
+                        //     Err(TryRecvError::Empty) => {
+                        //         String::from("Empty")
+                        //     }
+                        //     Err(TryRecvError::Disconnected) => {
+                        //         String::from("Disconnected")
+                        //     }
+                        // };
+
+                        // println!("{:?}", notifications);
+
+                        // if let Err(err) = Self::render_notification_response(
+                        //     right_area,
+                        //     buf,
+                        //     &characteristic_block,
+                        //     &value.value,
+                        //     characteristic,
+                        // ) {
+                        //     let error = PopUpErrorWidget::new(&err);
+                        //     error.render(right_area, buf);
+                        // }
                     }
                 }
-                ViewState::Idle => Self::render_characteristics(
-                    state,
-                    view,
-                    right_area,
-                    buf,
-                    &characteristic_block,
-                ),
+                ViewState::Idle => {
+                    self.render_characteristics(right_area, buf, &characteristic_block)
+                }
                 _ => {}
             },
-            _ => Self::render_characteristics(state, view, right_area, buf, &characteristic_block),
+            _ => self.render_characteristics(right_area, buf, &characteristic_block),
         }
 
         peripheral_block.render(left_area, buf);
         characteristic_block.render(right_area, buf)
     }
 
-    fn render_lower_area(state: &State, area: Rect, buf: &mut Buffer) {
+    fn render_lower_area(&mut self, area: Rect, buf: &mut Buffer) {
         let layout = Layout::default()
             .direction(Direction::Horizontal)
             .flex(Flex::Center)
@@ -339,7 +329,7 @@ impl<'a> DisplayWidget<'a> {
         let mut cmds =
             vec![Line::from(vec![" Quit: ".into(), " Ctrl + c ".blue().bold()]).centered()];
 
-        if state.get_characteristics().is_some() {
+        if self.state.get_characteristics().is_some() {
             cmds.push(
                 Line::from(vec![
                     " Navigate: ".into(),
@@ -358,7 +348,7 @@ impl<'a> DisplayWidget<'a> {
         Paragraph::new(global_cmds).render(global_cmd_area, buf);
     }
 
-    fn render_top_area(state: &State, view: &View, area: Rect, buf: &mut Buffer) {
+    fn render_top_area(&mut self, area: Rect, buf: &mut Buffer) {
         let layout = Layout::default()
             .direction(Direction::Horizontal)
             .flex(Flex::Center)
@@ -366,7 +356,7 @@ impl<'a> DisplayWidget<'a> {
 
         let [view_command_area, descriptor_area] = layout.areas(area);
 
-        match (view, state.get_indexed_characteristic()) {
+        match (&mut self.view, self.state.get_indexed_characteristic()) {
             (View::Peripheral(ViewState::Idle), None) => {
                 let mut cmds = Vec::new();
 
@@ -375,7 +365,7 @@ impl<'a> DisplayWidget<'a> {
                     " <s> ".blue().bold(),
                 ]));
 
-                if !state.get_local_names().is_empty() {
+                if !self.state.get_local_names().is_empty() {
                     cmds.push(
                         Line::from(vec![" Characteristic Scan: ".into(), " <c> ".blue().bold()])
                             .centered(),
@@ -435,7 +425,8 @@ impl<'a> DisplayWidget<'a> {
             (View::Characteristic(ViewState::Payload(characteristic_id)), _) => {
                 let mut cmds = Vec::new();
 
-                if state
+                if self
+                    .state
                     .get_characteristic_response(characteristic_id)
                     .is_some()
                 {
@@ -489,7 +480,7 @@ impl<'a> DisplayWidget<'a> {
                             .centered(),
                     );
 
-                Paragraph::new(state.input.value.as_str())
+                Paragraph::new(self.state.input.value.as_str())
                     .block(payload_block)
                     .render(descriptor_area, buf);
             }
@@ -499,7 +490,7 @@ impl<'a> DisplayWidget<'a> {
 }
 
 impl<'a> Widget for DisplayWidget<'a> {
-    fn render(self, area: Rect, buf: &mut Buffer) {
+    fn render(mut self, area: Rect, buf: &mut Buffer) {
         let outline_block = Block::bordered()
             .border_set(border::DOUBLE)
             .border_style(Style::new().yellow())
@@ -519,12 +510,12 @@ impl<'a> Widget for DisplayWidget<'a> {
             ]);
         let [top_area, mid_area, lower_area] = layout.areas(outline_block_inner_area);
 
-        let state = self.state;
-        let mut view = self.view;
+        // let state = self.state;
+        // let mut view = self.view;
 
-        Self::render_lower_area(state, lower_area, buf);
-        Self::render_mid_area(state, &mut view, mid_area, buf);
-        Self::render_top_area(state, &view, top_area, buf);
+        self.render_lower_area(lower_area, buf);
+        self.render_mid_area(mid_area, buf);
+        self.render_top_area(top_area, buf);
         outline_block.render(area, buf);
     }
 }

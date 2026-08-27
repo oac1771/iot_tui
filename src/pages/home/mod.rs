@@ -10,11 +10,11 @@ use crate::{
 };
 
 use super::Page;
+use crossbeam::channel;
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind};
 use iot_sdk::{CharPropFlags, Uuid, ValueNotification};
 use ratatui::widgets::Widget;
 use state::State;
-use crossbeam::channel;
 
 pub struct HomePage {
     state: State,
@@ -175,8 +175,10 @@ impl Page for HomePage {
 
                             match result {
                                 Ok(notification_rx) => {
-                                    self.view =
-                                        View::Characteristic(ViewState::Notifying((notification_rx, Vec::new())))
+                                    self.view = View::Characteristic(ViewState::Notifying((
+                                        notification_rx,
+                                        Vec::new(),
+                                    )))
                                 }
                                 Err(err) => self.error = Some(err),
                             }
@@ -300,11 +302,11 @@ impl Page for HomePage {
         Ok(())
     }
 
-    fn generate_widget(&self) -> impl Widget {
+    fn generate_widget(&mut self) -> impl Widget {
         if let Some(error) = &self.error {
             HomeWidget::PopUpError(PopUpErrorWidget::new(error.as_ref()))
         } else {
-            HomeWidget::Display(DisplayWidget::new(&self.state, self.view.clone()))
+            HomeWidget::Display(DisplayWidget::new(&self.state, &mut self.view))
         }
     }
 }
