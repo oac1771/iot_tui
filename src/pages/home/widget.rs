@@ -41,9 +41,9 @@ impl<'a> DisplayWidget<'a> {
         Self { state, view }
     }
 
-    fn render_peripheral_names(&self, area: Rect, buf: &mut Buffer, block: &Block) {
-        let local_names = self.state.get_local_names();
-        let index = self.state.get_peripheral_index();
+    fn render_peripheral_names(state: &State, area: Rect, buf: &mut Buffer, block: &Block) {
+        let local_names = state.get_local_names();
+        let index = state.get_peripheral_index();
 
         let scan_list: Vec<ListItem> = local_names
             .iter()
@@ -63,9 +63,14 @@ impl<'a> DisplayWidget<'a> {
         );
     }
 
-    fn render_characteristics(&self, area: Rect, buf: &mut Buffer, block: &Block) {
-        let characteristic_entries = self
-            .state
+    fn render_characteristics(
+        state: &State,
+        view: &View,
+        area: Rect,
+        buf: &mut Buffer,
+        block: &Block,
+    ) {
+        let characteristic_entries = state
             .get_characteristics()
             .unwrap_or(&vec![])
             .iter()
@@ -76,13 +81,13 @@ impl<'a> DisplayWidget<'a> {
             })
             .collect::<Vec<ListItem>>();
 
-        let index = self.state.get_characteristic_index();
+        let index = state.get_characteristic_index();
         let mut characteristic_list_state = ListState::default();
         characteristic_list_state.select(Some(index));
 
         let mut list = List::new(characteristic_entries).block(block.clone());
 
-        if let View::Characteristic(ViewState::Idle) = self.view {
+        if let View::Characteristic(ViewState::Idle) = view {
             list = list.highlight_style(Style::new().bold().magenta());
         };
 
@@ -90,7 +95,6 @@ impl<'a> DisplayWidget<'a> {
     }
 
     fn render_peripheral_scan_spinner(
-        &self,
         area: Rect,
         buf: &mut Buffer,
         spinner: &Spinner,
@@ -120,7 +124,6 @@ impl<'a> DisplayWidget<'a> {
     }
 
     fn render_characteristic_scan_spinner(
-        &self,
         area: Rect,
         buf: &mut Buffer,
         spinner: &Spinner,
@@ -150,7 +153,6 @@ impl<'a> DisplayWidget<'a> {
     }
 
     fn render_characteristic_response(
-        &self,
         area: Rect,
         buf: &mut Buffer,
         block: &Block,
@@ -180,7 +182,6 @@ impl<'a> DisplayWidget<'a> {
     }
 
     fn render_notification_response(
-        &self,
         area: Rect,
         buf: &mut Buffer,
         block: &Block,
@@ -198,11 +199,7 @@ impl<'a> DisplayWidget<'a> {
             .split(inner);
         let center_area = layout[1];
 
-        let lines = vec![
-            Line::from(vec![
-                format!("Data: {:?}", data).into(),
-            ]),
-        ];
+        let lines = vec![Line::from(vec![format!("Data: {:?}", data).into()])];
 
         let text = Text::from(lines);
 
@@ -220,10 +217,9 @@ impl<'a> DisplayWidget<'a> {
             .render(center_area, buf);
 
         Ok(())
-
     }
 
-    fn render_mid_area(&self, area: Rect, buf: &mut Buffer) {
+    fn render_mid_area(state: &State, view: &View, area: Rect, buf: &mut Buffer) {
         let layout = Layout::default()
             .direction(Direction::Horizontal)
             .constraints(vec![Constraint::Percentage(40), Constraint::Percentage(60)]);
@@ -237,37 +233,40 @@ impl<'a> DisplayWidget<'a> {
             .border_set(border::DOUBLE)
             .title_top(Line::from(" Characteristics ").centered());
 
-        match self.view {
+        match view {
             View::Peripheral(view_state) => match view_state {
-                ViewState::Scanning((spinner, scanning_message)) => self
-                    .render_peripheral_scan_spinner(
+                ViewState::Scanning((spinner, scanning_message)) => {
+                    Self::render_peripheral_scan_spinner(
                         left_area,
                         buf,
                         spinner,
                         &peripheral_block,
                         scanning_message,
-                    ),
-                ViewState::Idle => self.render_peripheral_names(left_area, buf, &peripheral_block),
+                    )
+                }
+                ViewState::Idle => {
+                    Self::render_peripheral_names(state, left_area, buf, &peripheral_block)
+                }
                 _ => {}
             },
-            _ => self.render_peripheral_names(left_area, buf, &peripheral_block),
+            _ => Self::render_peripheral_names(state, left_area, buf, &peripheral_block),
         }
 
-        match self.view {
+        match view {
             View::Characteristic(view_state) => match view_state {
-                ViewState::Scanning((spinner, scanning_message)) => self
-                    .render_characteristic_scan_spinner(
+                ViewState::Scanning((spinner, scanning_message)) => {
+                    Self::render_characteristic_scan_spinner(
                         right_area,
                         buf,
                         spinner,
                         &characteristic_block,
                         scanning_message,
-                    ),
+                    )
+                }
                 ViewState::Payload(characteristic_id) => {
-                    if let Some(characteristic) = self.state.get_characteristic(characteristic_id)
-                        && let Some(response) =
-                            self.state.get_characteristic_response(characteristic_id)
-                        && let Err(err) = self.render_characteristic_response(
+                    if let Some(characteristic) = state.get_characteristic(characteristic_id)
+                        && let Some(response) = state.get_characteristic_response(characteristic_id)
+                        && let Err(err) = Self::render_characteristic_response(
                             right_area,
                             buf,
                             &characteristic_block,
@@ -280,15 +279,15 @@ impl<'a> DisplayWidget<'a> {
                     }
                 }
                 ViewState::Notifying(notification_rx) => {
-
-                    if let Some(characteristic) = self.state.get_indexed_characteristic() {
+                    if let Some(characteristic) = state.get_indexed_characteristic() {
                         let entries: Vec<String> = Vec::new();
 
                         // maybe dont loop here so outside event loop can handle Esc stroke
+                        // will probably need to not make these methods self, so that can store entries in ViewState and can be called by &mut
                         loop {
                             match notification_rx.try_recv() {
                                 Ok(value) => {
-                                    if let Err(err) = self.render_notification_response(
+                                    if let Err(err) = Self::render_notification_response(
                                         right_area,
                                         buf,
                                         &characteristic_block,
@@ -297,7 +296,7 @@ impl<'a> DisplayWidget<'a> {
                                     ) {
                                         let error = PopUpErrorWidget::new(&err);
                                         error.render(right_area, buf);
-                                        break
+                                        break;
                                     }
                                 }
                                 Err(TryRecvError::Empty) => {
@@ -305,31 +304,35 @@ impl<'a> DisplayWidget<'a> {
                                     let err = String::from("");
                                     let error = PopUpErrorWidget::new(&err);
                                     error.render(right_area, buf);
-                                    continue
+                                    continue;
                                 }
                                 Err(TryRecvError::Disconnected) => {
                                     let err = format!("Disconnected from notification stream");
                                     let error = PopUpErrorWidget::new(&err);
                                     error.render(right_area, buf);
-                                    break
+                                    break;
                                 }
                             }
                         }
                     }
                 }
-                ViewState::Idle => {
-                    self.render_characteristics(right_area, buf, &characteristic_block)
-                }
+                ViewState::Idle => Self::render_characteristics(
+                    state,
+                    view,
+                    right_area,
+                    buf,
+                    &characteristic_block,
+                ),
                 _ => {}
             },
-            _ => self.render_characteristics(right_area, buf, &characteristic_block),
+            _ => Self::render_characteristics(state, view, right_area, buf, &characteristic_block),
         }
 
         peripheral_block.render(left_area, buf);
         characteristic_block.render(right_area, buf)
     }
 
-    fn render_lower_area(&self, area: Rect, buf: &mut Buffer) {
+    fn render_lower_area(state: &State, area: Rect, buf: &mut Buffer) {
         let layout = Layout::default()
             .direction(Direction::Horizontal)
             .flex(Flex::Center)
@@ -344,7 +347,7 @@ impl<'a> DisplayWidget<'a> {
         let mut cmds =
             vec![Line::from(vec![" Quit: ".into(), " Ctrl + c ".blue().bold()]).centered()];
 
-        if self.state.get_characteristics().is_some() {
+        if state.get_characteristics().is_some() {
             cmds.push(
                 Line::from(vec![
                     " Navigate: ".into(),
@@ -363,7 +366,7 @@ impl<'a> DisplayWidget<'a> {
         Paragraph::new(global_cmds).render(global_cmd_area, buf);
     }
 
-    fn render_top_area(&self, area: Rect, buf: &mut Buffer) {
+    fn render_top_area(state: &State, view: &View, area: Rect, buf: &mut Buffer) {
         let layout = Layout::default()
             .direction(Direction::Horizontal)
             .flex(Flex::Center)
@@ -371,7 +374,7 @@ impl<'a> DisplayWidget<'a> {
 
         let [view_command_area, descriptor_area] = layout.areas(area);
 
-        match (self.view, self.state.get_indexed_characteristic()) {
+        match (view, state.get_indexed_characteristic()) {
             (View::Peripheral(ViewState::Idle), None) => {
                 let mut cmds = Vec::new();
 
@@ -380,7 +383,7 @@ impl<'a> DisplayWidget<'a> {
                     " <s> ".blue().bold(),
                 ]));
 
-                if !self.state.get_local_names().is_empty() {
+                if !state.get_local_names().is_empty() {
                     cmds.push(
                         Line::from(vec![" Characteristic Scan: ".into(), " <c> ".blue().bold()])
                             .centered(),
@@ -440,8 +443,7 @@ impl<'a> DisplayWidget<'a> {
             (View::Characteristic(ViewState::Payload(characteristic_id)), _) => {
                 let mut cmds = Vec::new();
 
-                if self
-                    .state
+                if state
                     .get_characteristic_response(characteristic_id)
                     .is_some()
                 {
@@ -495,7 +497,7 @@ impl<'a> DisplayWidget<'a> {
                             .centered(),
                     );
 
-                Paragraph::new(self.state.input.value.as_str())
+                Paragraph::new(state.input.value.as_str())
                     .block(payload_block)
                     .render(descriptor_area, buf);
             }
@@ -525,9 +527,12 @@ impl<'a> Widget for DisplayWidget<'a> {
             ]);
         let [top_area, mid_area, lower_area] = layout.areas(outline_block_inner_area);
 
-        self.render_lower_area(lower_area, buf);
-        self.render_mid_area(mid_area, buf);
-        self.render_top_area(top_area, buf);
+        let state = self.state;
+        let view = self.view;
+
+        Self::render_lower_area(state, lower_area, buf);
+        Self::render_mid_area(state, view, mid_area, buf);
+        Self::render_top_area(state, view, top_area, buf);
         outline_block.render(area, buf);
     }
 }

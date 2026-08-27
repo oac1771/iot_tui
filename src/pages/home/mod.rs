@@ -28,6 +28,7 @@ enum View {
     Characteristic(ViewState),
 }
 
+// #[derive(Clone)]
 enum ViewState {
     Idle,
     Scanning((Spinner, String)),

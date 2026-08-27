@@ -13,12 +13,13 @@ use services::{
     storage::{STORAGE_DATA_CHAR_UUID, STORAGE_DATA_DESCRIPTOR_UUID, StorageServiceDataDescriptor},
     trouble_host::types::gatt_traits::AsGatt,
 };
-use std::{sync::mpsc::{self as std_mpsc}, pin::Pin};
+use std::{
+    pin::Pin,
+    sync::mpsc::{self as std_mpsc},
+};
 use tokio::{
     select,
-    sync::{
-        mpsc::{self, Receiver, Sender},
-    },
+    sync::mpsc::{self, Receiver, Sender},
     time::{Duration, sleep},
 };
 

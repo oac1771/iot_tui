@@ -1,6 +1,6 @@
 const SPINNER_FRAMES: &[&str] = &["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct Spinner {
     index: usize,
 }
