@@ -1,5 +1,3 @@
-use std::sync::mpsc::TryRecvError;
-
 use crate::{
     pages::home::{View, ViewState, state::State},
     utils::{
@@ -17,6 +15,8 @@ use ratatui::{
     widgets::{Block, Clear, List, ListItem, ListState, Paragraph, StatefulWidget, Widget, Wrap},
 };
 
+use crossbeam::channel::TryRecvError;
+
 pub enum HomeWidget<'a> {
     PopUpError(PopUpErrorWidget<'a>),
     Display(DisplayWidget<'a>),
@@ -33,11 +33,11 @@ impl<'a> Widget for HomeWidget<'a> {
 
 pub struct DisplayWidget<'a> {
     state: &'a State,
-    view: &'a View,
+    view: View,
 }
 
 impl<'a> DisplayWidget<'a> {
-    pub fn new(state: &'a State, view: &'a View) -> Self {
+    pub fn new(state: &'a State, view: View) -> Self {
         Self { state, view }
     }
 
@@ -186,7 +186,7 @@ impl<'a> DisplayWidget<'a> {
         buf: &mut Buffer,
         block: &Block,
         data: &[u8],
-        characteristic: &KnownCharacteristic,
+        _characteristic: &KnownCharacteristic,
     ) -> Result<(), String> {
         let inner = block.inner(area);
         let layout = Layout::default()
@@ -219,7 +219,7 @@ impl<'a> DisplayWidget<'a> {
         Ok(())
     }
 
-    fn render_mid_area(state: &State, view: &View, area: Rect, buf: &mut Buffer) {
+    fn render_mid_area(state: &State, view: &mut View, area: Rect, buf: &mut Buffer) {
         let layout = Layout::default()
             .direction(Direction::Horizontal)
             .constraints(vec![Constraint::Percentage(40), Constraint::Percentage(60)]);
@@ -278,40 +278,32 @@ impl<'a> DisplayWidget<'a> {
                         error.render(right_area, buf);
                     }
                 }
-                ViewState::Notifying(notification_rx) => {
+                ViewState::Notifying((notification_rx, notifications)) => {
                     if let Some(characteristic) = state.get_indexed_characteristic() {
-                        let entries: Vec<String> = Vec::new();
+                        notifications.push(String::from("notification..."));
 
-                        // maybe dont loop here so outside event loop can handle Esc stroke
-                        // will probably need to not make these methods self, so that can store entries in ViewState and can be called by &mut
-                        loop {
-                            match notification_rx.try_recv() {
-                                Ok(value) => {
-                                    if let Err(err) = Self::render_notification_response(
-                                        right_area,
-                                        buf,
-                                        &characteristic_block,
-                                        &value.value,
-                                        characteristic,
-                                    ) {
-                                        let error = PopUpErrorWidget::new(&err);
-                                        error.render(right_area, buf);
-                                        break;
-                                    }
-                                }
-                                Err(TryRecvError::Empty) => {
-                                    // need to render empty notification message
-                                    let err = String::from("");
+                        match notification_rx.try_recv() {
+                            Ok(value) => {
+                                if let Err(err) = Self::render_notification_response(
+                                    right_area,
+                                    buf,
+                                    &characteristic_block,
+                                    &value.value,
+                                    characteristic,
+                                ) {
                                     let error = PopUpErrorWidget::new(&err);
                                     error.render(right_area, buf);
-                                    continue;
                                 }
-                                Err(TryRecvError::Disconnected) => {
-                                    let err = format!("Disconnected from notification stream");
-                                    let error = PopUpErrorWidget::new(&err);
-                                    error.render(right_area, buf);
-                                    break;
-                                }
+                            }
+                            Err(TryRecvError::Empty) => {
+                                let err = String::from("Empty");
+                                let error = PopUpErrorWidget::new(&err);
+                                error.render(right_area, buf);
+                            }
+                            Err(TryRecvError::Disconnected) => {
+                                let err = String::from("Disconnected from notification stream");
+                                let error = PopUpErrorWidget::new(&err);
+                                error.render(right_area, buf);
                             }
                         }
                     }
@@ -528,11 +520,11 @@ impl<'a> Widget for DisplayWidget<'a> {
         let [top_area, mid_area, lower_area] = layout.areas(outline_block_inner_area);
 
         let state = self.state;
-        let view = self.view;
+        let mut view = self.view;
 
         Self::render_lower_area(state, lower_area, buf);
-        Self::render_mid_area(state, view, mid_area, buf);
-        Self::render_top_area(state, view, top_area, buf);
+        Self::render_mid_area(state, &mut view, mid_area, buf);
+        Self::render_top_area(state, &view, top_area, buf);
         outline_block.render(area, buf);
     }
 }

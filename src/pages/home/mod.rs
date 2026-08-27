@@ -14,7 +14,7 @@ use crossterm::event::{KeyCode, KeyEvent, KeyEventKind};
 use iot_sdk::{CharPropFlags, Uuid, ValueNotification};
 use ratatui::widgets::Widget;
 use state::State;
-use std::sync::mpsc::{self as std_mpsc};
+use crossbeam::channel;
 
 pub struct HomePage {
     state: State,
@@ -23,18 +23,19 @@ pub struct HomePage {
     peripherals_client: PeripheralsClient,
 }
 
+#[derive(Clone)]
 enum View {
     Peripheral(ViewState),
     Characteristic(ViewState),
 }
 
-// #[derive(Clone)]
+#[derive(Clone)]
 enum ViewState {
     Idle,
     Scanning((Spinner, String)),
     Payload(Uuid),
     Editing,
-    Notifying(std_mpsc::Receiver<ValueNotification>),
+    Notifying((channel::Receiver<ValueNotification>, Vec<String>)),
 }
 
 impl HomePage {
@@ -175,7 +176,7 @@ impl Page for HomePage {
                             match result {
                                 Ok(notification_rx) => {
                                     self.view =
-                                        View::Characteristic(ViewState::Notifying(notification_rx))
+                                        View::Characteristic(ViewState::Notifying((notification_rx, Vec::new())))
                                 }
                                 Err(err) => self.error = Some(err),
                             }
@@ -303,7 +304,7 @@ impl Page for HomePage {
         if let Some(error) = &self.error {
             HomeWidget::PopUpError(PopUpErrorWidget::new(error.as_ref()))
         } else {
-            HomeWidget::Display(DisplayWidget::new(&self.state, &self.view))
+            HomeWidget::Display(DisplayWidget::new(&self.state, self.view.clone()))
         }
     }
 }

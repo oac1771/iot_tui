@@ -15,13 +15,13 @@ use services::{
 };
 use std::{
     pin::Pin,
-    sync::mpsc::{self as std_mpsc},
 };
 use tokio::{
     select,
     sync::mpsc::{self, Receiver, Sender},
     time::{Duration, sleep},
 };
+use crossbeam::channel::{self, bounded};
 
 pub async fn init() -> Result<(PeripheralsInit, PeripheralsClient), String> {
     let peripherals = Peripherals::new().await?;
@@ -59,7 +59,7 @@ pub enum PeripheralRequest {
         (
             PlatformPeripheral,
             Uuid,
-            std_mpsc::SyncSender<ValueNotification>,
+            channel::Sender<ValueNotification>,
         ),
     ),
 }
@@ -290,7 +290,7 @@ impl Peripherals {
         tx: Sender<PeripheralResponse>,
         peripheral: PlatformPeripheral,
         characteristic_id: Uuid,
-        notify_tx: std_mpsc::SyncSender<ValueNotification>,
+        notify_tx: channel::Sender<ValueNotification>,
     ) -> Result<(), String> {
         let result = async {
 
@@ -365,8 +365,8 @@ impl PeripheralsClient {
         &self,
         peripheral: PlatformPeripheral,
         characteristic_id: Uuid,
-    ) -> Result<std_mpsc::Receiver<ValueNotification>, String> {
-        let (notify_tx, notify_rx) = std_mpsc::sync_channel(100);
+    ) -> Result<channel::Receiver<ValueNotification>, String> {
+        let (notify_tx, notify_rx) = bounded(100);
 
         let request = PeripheralRequest::Notify((peripheral, characteristic_id, notify_tx));
         self.send_request(request).await?;

@@ -1,1 +1,1 @@
-try using std sync_channel for sending/receiving notifications
+use crossbeam for notification channels
