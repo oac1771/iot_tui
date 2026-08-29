@@ -1,6 +1,7 @@
 use crate::{
     pages::home::{View, ViewState, state::State},
     utils::{
+        notifications::Notifications,
         peripherals::{CharacteristicType, KnownCharacteristic},
         spinner::Spinner,
     },
@@ -15,7 +16,7 @@ use ratatui::{
     widgets::{Block, Clear, List, ListItem, ListState, Paragraph, StatefulWidget, Widget, Wrap},
 };
 
-// use crossbeam::channel::TryRecvError;
+use crossbeam::channel::TryRecvError;
 
 pub enum HomeWidget<'a> {
     PopUpError(PopUpErrorWidget<'a>),
@@ -180,21 +181,23 @@ impl<'a> DisplayWidget<'a> {
         area: Rect,
         buf: &mut Buffer,
         block: &Block,
-        data: &[u8],
-        _characteristic: &KnownCharacteristic,
-    ) -> Result<(), String> {
+        notifications: &Notifications,
+    ) {
         let inner = block.inner(area);
         let layout = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Percentage(50),
-                Constraint::Length(3),
-                Constraint::Percentage(50),
+                Constraint::Percentage(10),
+                Constraint::Length(80),
+                Constraint::Percentage(10),
             ])
             .split(inner);
         let center_area = layout[1];
 
-        let lines = vec![Line::from(vec![format!("Data: {:?}", data).into()])];
+        let lines = notifications
+            .notifications()
+            .map(|n| Line::from(vec![format!(">>> {}", n).into()]))
+            .collect::<Vec<Line>>();
 
         let text = Text::from(lines);
 
@@ -210,8 +213,6 @@ impl<'a> DisplayWidget<'a> {
         Paragraph::new(text)
             .block(payload_block)
             .render(center_area, buf);
-
-        Ok(())
     }
 
     fn render_mid_area(&mut self, area: Rect, buf: &mut Buffer) {
@@ -268,38 +269,34 @@ impl<'a> DisplayWidget<'a> {
                             characteristic,
                         )
                     {
-                        let error = PopUpErrorWidget::new(&err);
-                        error.render(right_area, buf);
+                        *self.view = View::Characteristic(ViewState::Error(err));
                     }
                 }
-                ViewState::Notifying((_notification_rx, _notifications)) => {
-                    if let Some(_characteristic) = self.state.get_indexed_characteristic() {
-                        // notifications.push(String::from("notification..."));
+                ViewState::Notifying((notification_rx, notifications)) => {
+                    if let Some(characteristic) = self.state.get_indexed_characteristic() {
+                        match notification_rx.try_recv() {
+                            Ok(value) => {
+                                // convert characteristic to string value here
+                                notifications
+                                    .update_notifications(format!("Value: {:?}", value.value));
+                            }
+                            Err(TryRecvError::Empty) => {
+                                notifications.update_empty_status(true);
+                            }
+                            Err(TryRecvError::Disconnected) => {
+                                *self.view = View::Characteristic(ViewState::Error(String::from(
+                                    "Disconnected from Notification Stream",
+                                )));
+                                return;
+                            }
+                        };
 
-                        // let result = match notification_rx.try_recv() {
-                        //     Ok(value) => {
-                        //         String::from("Value")
-                        //     }
-                        //     Err(TryRecvError::Empty) => {
-                        //         String::from("Empty")
-                        //     }
-                        //     Err(TryRecvError::Disconnected) => {
-                        //         String::from("Disconnected")
-                        //     }
-                        // };
-
-                        // println!("{:?}", notifications);
-
-                        // if let Err(err) = Self::render_notification_response(
-                        //     right_area,
-                        //     buf,
-                        //     &characteristic_block,
-                        //     &value.value,
-                        //     characteristic,
-                        // ) {
-                        //     let error = PopUpErrorWidget::new(&err);
-                        //     error.render(right_area, buf);
-                        // }
+                        Self::render_notification_response(
+                            right_area,
+                            buf,
+                            &characteristic_block,
+                            &notifications,
+                        )
                     }
                 }
                 ViewState::Idle => {
@@ -509,9 +506,6 @@ impl<'a> Widget for DisplayWidget<'a> {
                 Constraint::Percentage(10),
             ]);
         let [top_area, mid_area, lower_area] = layout.areas(outline_block_inner_area);
-
-        // let state = self.state;
-        // let mut view = self.view;
 
         self.render_lower_area(lower_area, buf);
         self.render_mid_area(mid_area, buf);

@@ -4,6 +4,7 @@ mod widget;
 use crate::{
     pages::home::widget::{DisplayWidget, HomeWidget, PopUpErrorWidget},
     utils::{
+        notifications::Notifications,
         peripherals::{PeripheralResponse, PeripheralsClient, ResponseType},
         spinner::Spinner,
     },
@@ -35,7 +36,8 @@ enum ViewState {
     Scanning((Spinner, String)),
     Payload(Uuid),
     Editing,
-    Notifying((channel::Receiver<ValueNotification>, Vec<String>)),
+    Notifying((channel::Receiver<ValueNotification>, Notifications)),
+    Error(String),
 }
 
 impl HomePage {
@@ -141,6 +143,10 @@ impl Page for HomePage {
                     }
                     _ => {}
                 },
+                View::Peripheral(ViewState::Error(err)) => {
+                    self.error = Some(err.to_string());
+                }
+
                 View::Characteristic(ViewState::Idle) => match key_event.code {
                     KeyCode::Up => self.state.update_characteristic_index(-1),
                     KeyCode::Down => self.state.update_characteristic_index(1),
@@ -177,7 +183,7 @@ impl Page for HomePage {
                                 Ok(notification_rx) => {
                                     self.view = View::Characteristic(ViewState::Notifying((
                                         notification_rx,
-                                        Vec::new(),
+                                        Notifications::default(),
                                     )))
                                 }
                                 Err(err) => self.error = Some(err),
@@ -220,6 +226,9 @@ impl Page for HomePage {
                     if key_event.code == KeyCode::Esc {
                         self.view = View::Characteristic(ViewState::Idle)
                     }
+                }
+                View::Characteristic(ViewState::Error(err)) => {
+                    self.error = Some(err.to_string());
                 }
                 _ => {}
             }
