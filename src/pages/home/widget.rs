@@ -188,11 +188,22 @@ impl<'a> DisplayWidget<'a> {
             .direction(Direction::Vertical)
             .constraints([
                 Constraint::Percentage(10),
-                Constraint::Length(80),
-                Constraint::Percentage(10),
+                Constraint::Percentage(90),
             ])
             .split(inner);
+    
+        let top_area = layout[0];
         let center_area = layout[1];
+    
+        if notifications.is_channel_empty() {
+            let notifications_status_block = Block::bordered()
+                .border_set(border::DOUBLE)
+                .border_style(Style::new().light_blue());
+    
+            Paragraph::new("Notification Channel is currently empty...")
+                .block(notifications_status_block)
+                .render(top_area, buf);
+        }
 
         let lines = notifications
             .notifications()
@@ -201,7 +212,7 @@ impl<'a> DisplayWidget<'a> {
 
         let text = Text::from(lines);
 
-        let payload_block = Block::bordered()
+        let notifications_block = Block::bordered()
             .border_set(border::DOUBLE)
             .border_style(Style::new().light_blue())
             .title_top(
@@ -211,7 +222,7 @@ impl<'a> DisplayWidget<'a> {
             );
 
         Paragraph::new(text)
-            .block(payload_block)
+            .block(notifications_block)
             .render(center_area, buf);
     }
 

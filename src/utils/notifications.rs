@@ -1,4 +1,4 @@
-#[derive(Default, Clone, Debug)]
+#[derive(Clone, Debug)]
 pub struct Notifications {
     status: bool,
     notifications: Vec<String>,
@@ -19,5 +19,15 @@ impl Notifications {
 
     pub fn notifications(&self) -> impl Iterator<Item = &str> {
         self.notifications.iter().map(|n| n.as_str())
+    }
+}
+
+
+impl Default for Notifications {
+    fn default() -> Self {
+        Self {
+            status: true,
+            notifications: Vec::new()
+        }
     }
 }
