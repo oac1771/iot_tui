@@ -28,6 +28,7 @@ pub struct HomePage {
 enum View {
     Peripheral(ViewState),
     Characteristic(ViewState),
+    Error(String)
 }
 
 #[derive(Clone)]
@@ -37,7 +38,6 @@ enum ViewState {
     Payload(Uuid),
     Editing,
     Notifying((channel::Receiver<ValueNotification>, Notifications)),
-    Error(String),
 }
 
 impl HomePage {
@@ -143,9 +143,6 @@ impl Page for HomePage {
                     }
                     _ => {}
                 },
-                View::Peripheral(ViewState::Error(err)) => {
-                    self.error = Some(err.to_string());
-                }
 
                 View::Characteristic(ViewState::Idle) => match key_event.code {
                     KeyCode::Up => self.state.update_characteristic_index(-1),
@@ -227,7 +224,7 @@ impl Page for HomePage {
                         self.view = View::Characteristic(ViewState::Idle)
                     }
                 }
-                View::Characteristic(ViewState::Error(err)) => {
+                View::Error(err) => {
                     self.error = Some(err.to_string());
                 }
                 _ => {}
@@ -236,7 +233,8 @@ impl Page for HomePage {
             && self.error.is_some()
             && let KeyCode::Esc = key_event.code
         {
-            self.error = None
+            self.error = None;
+            self.view = View::Peripheral(ViewState::Idle);
         }
 
         Ok(())
@@ -271,14 +269,15 @@ impl Page for HomePage {
                 self.state.update_characteristics(characteristics);
             }
             PeripheralResponse::ScanningMessageUpdate(message) => {
-                let view_state = match &mut self.view {
-                    View::Characteristic(state) => state,
-                    View::Peripheral(state) => state,
+                match &mut self.view {
+                    View::Characteristic(state) |  View::Peripheral(state) => {
+                        if let ViewState::Scanning((_, scanning_message)) = state {
+                            *scanning_message = message
+                        }
+                    },
+                    _ => {}
                 };
 
-                if let ViewState::Scanning((_, scanning_message)) = view_state {
-                    *scanning_message = message
-                }
             }
             PeripheralResponse::ReadCharacteristicCallStarted => {
                 self.view = View::Characteristic(ViewState::Scanning((

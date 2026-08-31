@@ -226,7 +226,7 @@ impl<'a> DisplayWidget<'a> {
             .render(center_area, buf);
     }
 
-    fn render_mid_area(&mut self, area: Rect, buf: &mut Buffer) {
+    fn render_mid_area(&mut self, area: Rect, buf: &mut Buffer) -> Result<(), String> {
         let layout = Layout::default()
             .direction(Direction::Horizontal)
             .constraints(vec![Constraint::Percentage(40), Constraint::Percentage(60)]);
@@ -237,8 +237,7 @@ impl<'a> DisplayWidget<'a> {
             .title_top(Line::from(" Peripherals ").centered());
 
         let characteristic_block = Block::bordered()
-            .border_set(border::DOUBLE)
-            .title_top(Line::from(" Characteristics ").centered());
+            .border_set(border::DOUBLE);
 
         match self.view {
             View::Peripheral(view_state) => match view_state {
@@ -254,7 +253,8 @@ impl<'a> DisplayWidget<'a> {
                 ViewState::Idle => self.render_peripheral_names(left_area, buf, &peripheral_block),
                 _ => {}
             },
-            _ => self.render_peripheral_names(left_area, buf, &peripheral_block),
+            View::Characteristic(_) => {},
+            View::Error(_) => {},
         }
 
         match self.view {
@@ -280,7 +280,7 @@ impl<'a> DisplayWidget<'a> {
                             characteristic,
                         )
                     {
-                        *self.view = View::Characteristic(ViewState::Error(err));
+                        return Err(err)
                     }
                 }
                 ViewState::Notifying((notification_rx, notifications)) => {
@@ -295,10 +295,7 @@ impl<'a> DisplayWidget<'a> {
                                 notifications.update_empty_status(true);
                             }
                             Err(TryRecvError::Disconnected) => {
-                                *self.view = View::Characteristic(ViewState::Error(String::from(
-                                    "Disconnected from Notification Stream",
-                                )));
-                                return;
+                                return Err(String::from("Disconnected from Notification Stream"))
                             }
                         };
 
@@ -315,11 +312,14 @@ impl<'a> DisplayWidget<'a> {
                 }
                 _ => {}
             },
-            _ => self.render_characteristics(right_area, buf, &characteristic_block),
+            View::Peripheral(_) => {},
+            View::Error(_) => {},
         }
 
         peripheral_block.render(left_area, buf);
-        characteristic_block.render(right_area, buf)
+        // characteristic_block.render(right_area, buf)
+
+        Ok(())
     }
 
     fn render_lower_area(&mut self, area: Rect, buf: &mut Buffer) {
@@ -519,9 +519,15 @@ impl<'a> Widget for DisplayWidget<'a> {
         let [top_area, mid_area, lower_area] = layout.areas(outline_block_inner_area);
 
         self.render_lower_area(lower_area, buf);
-        self.render_mid_area(mid_area, buf);
-        self.render_top_area(top_area, buf);
-        outline_block.render(area, buf);
+        if let Err(error) = self.render_mid_area(mid_area, buf) {
+            let pop_up_error_widget = PopUpErrorWidget::new(&error);
+            pop_up_error_widget.render(area, buf);
+            *self.view = View::Error(error);
+
+        } else {
+            self.render_top_area(top_area, buf);
+            outline_block.render(area, buf);
+        }
     }
 }
 
