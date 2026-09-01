@@ -42,6 +42,94 @@ impl<'a> DisplayWidget<'a> {
         Self { state, view }
     }
 
+    fn render_peripheral(&mut self, area: Rect, buf: &mut Buffer) {
+        let peripheral_block = Block::bordered().border_set(border::DOUBLE);
+
+        match self.view {
+            View::Peripheral(view_state) => match view_state {
+                ViewState::Scanning((spinner, scanning_message)) => {
+                    Self::render_peripheral_scan_spinner(
+                        area,
+                        buf,
+                        spinner,
+                        &peripheral_block,
+                        scanning_message,
+                    )
+                }
+                ViewState::Idle => self.render_peripheral_names(area, buf, &peripheral_block),
+                _ => {}
+            },
+            View::Characteristic(_) => {}
+            View::Error(_) => {}
+        }
+
+        peripheral_block.render(area, buf);
+    }
+
+    fn render_characteristic(&mut self, area: Rect, buf: &mut Buffer) -> Result<(), String> {
+        let characteristic_block = Block::bordered().border_set(border::DOUBLE);
+        match self.view {
+            View::Characteristic(view_state) => match view_state {
+                ViewState::Scanning((spinner, scanning_message)) => {
+                    Self::render_characteristic_scan_spinner(
+                        area,
+                        buf,
+                        spinner,
+                        &characteristic_block,
+                        scanning_message,
+                    )
+                }
+                ViewState::Payload(characteristic_id) => {
+                    if let Some(characteristic) = self.state.get_characteristic(characteristic_id)
+                        && let Some(response) =
+                            self.state.get_characteristic_response(characteristic_id)
+                        && let Err(err) = Self::render_characteristic_response(
+                            area,
+                            buf,
+                            &characteristic_block,
+                            response.data(),
+                            characteristic,
+                        )
+                    {
+                        return Err(err);
+                    }
+                }
+                ViewState::Notifying((notification_rx, notifications)) => {
+                    if let Some(characteristic) = self.state.get_indexed_characteristic() {
+                        match notification_rx.try_recv() {
+                            Ok(value) => {
+                                // convert characteristic to string value here
+                                notifications
+                                    .update_notifications(format!("Value: {:?}", value.value));
+                            }
+                            Err(TryRecvError::Empty) => {
+                                notifications.update_empty_status(true);
+                            }
+                            Err(TryRecvError::Disconnected) => {
+                                return Err(String::from("Disconnected from Notification Stream"));
+                            }
+                        };
+
+                        Self::render_notification_response(
+                            area,
+                            buf,
+                            &characteristic_block,
+                            &notifications,
+                        )
+                    }
+                }
+                ViewState::Idle => self.render_characteristics(area, buf, &characteristic_block),
+                _ => {}
+            },
+            View::Peripheral(_) => {}
+            View::Error(_) => {}
+        }
+
+        characteristic_block.render(area, buf);
+
+        Ok(())
+    }
+
     fn render_peripheral_names(&mut self, area: Rect, buf: &mut Buffer, block: &Block) {
         let local_names = self.state.get_local_names();
         let index = self.state.get_peripheral_index();
@@ -229,91 +317,8 @@ impl<'a> DisplayWidget<'a> {
             .constraints(vec![Constraint::Percentage(40), Constraint::Percentage(60)]);
         let [left_area, right_area] = layout.areas(area);
 
-        let peripheral_block = Block::bordered()
-            .border_set(border::DOUBLE)
-            .title_top(Line::from(" Peripherals ").centered());
-
-        let characteristic_block = Block::bordered().border_set(border::DOUBLE);
-
-        match self.view {
-            View::Peripheral(view_state) => match view_state {
-                ViewState::Scanning((spinner, scanning_message)) => {
-                    Self::render_peripheral_scan_spinner(
-                        left_area,
-                        buf,
-                        spinner,
-                        &peripheral_block,
-                        scanning_message,
-                    )
-                }
-                ViewState::Idle => self.render_peripheral_names(left_area, buf, &peripheral_block),
-                _ => {}
-            },
-            View::Characteristic(_) => {}
-            View::Error(_) => {}
-        }
-
-        match self.view {
-            View::Characteristic(view_state) => match view_state {
-                ViewState::Scanning((spinner, scanning_message)) => {
-                    Self::render_characteristic_scan_spinner(
-                        right_area,
-                        buf,
-                        spinner,
-                        &characteristic_block,
-                        scanning_message,
-                    )
-                }
-                ViewState::Payload(characteristic_id) => {
-                    if let Some(characteristic) = self.state.get_characteristic(characteristic_id)
-                        && let Some(response) =
-                            self.state.get_characteristic_response(characteristic_id)
-                        && let Err(err) = Self::render_characteristic_response(
-                            right_area,
-                            buf,
-                            &characteristic_block,
-                            response.data(),
-                            characteristic,
-                        )
-                    {
-                        return Err(err);
-                    }
-                }
-                ViewState::Notifying((notification_rx, notifications)) => {
-                    if let Some(characteristic) = self.state.get_indexed_characteristic() {
-                        match notification_rx.try_recv() {
-                            Ok(value) => {
-                                // convert characteristic to string value here
-                                notifications
-                                    .update_notifications(format!("Value: {:?}", value.value));
-                            }
-                            Err(TryRecvError::Empty) => {
-                                notifications.update_empty_status(true);
-                            }
-                            Err(TryRecvError::Disconnected) => {
-                                return Err(String::from("Disconnected from Notification Stream"));
-                            }
-                        };
-
-                        Self::render_notification_response(
-                            right_area,
-                            buf,
-                            &characteristic_block,
-                            &notifications,
-                        )
-                    }
-                }
-                ViewState::Idle => {
-                    self.render_characteristics(right_area, buf, &characteristic_block)
-                }
-                _ => {}
-            },
-            View::Peripheral(_) => {}
-            View::Error(_) => {}
-        }
-
-        peripheral_block.render(left_area, buf);
-        // characteristic_block.render(right_area, buf)
+        self.render_peripheral(left_area, buf);
+        self.render_characteristic(right_area, buf)?;
 
         Ok(())
     }
