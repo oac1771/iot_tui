@@ -19,7 +19,7 @@ use ratatui::{
 use crossbeam::channel::TryRecvError;
 
 pub enum HomeWidget<'a> {
-    PopUpError(PopUpErrorWidget<'a>),
+    PopUpError(PopUpErrorWidget),
     Display(DisplayWidget<'a>),
 }
 
@@ -186,20 +186,17 @@ impl<'a> DisplayWidget<'a> {
         let inner = block.inner(area);
         let layout = Layout::default()
             .direction(Direction::Vertical)
-            .constraints([
-                Constraint::Percentage(10),
-                Constraint::Percentage(90),
-            ])
+            .constraints([Constraint::Percentage(10), Constraint::Percentage(90)])
             .split(inner);
-    
+
         let top_area = layout[0];
         let center_area = layout[1];
-    
+
         if notifications.is_channel_empty() {
             let notifications_status_block = Block::bordered()
                 .border_set(border::DOUBLE)
                 .border_style(Style::new().light_blue());
-    
+
             Paragraph::new("Notification Channel is currently empty...")
                 .block(notifications_status_block)
                 .render(top_area, buf);
@@ -236,8 +233,7 @@ impl<'a> DisplayWidget<'a> {
             .border_set(border::DOUBLE)
             .title_top(Line::from(" Peripherals ").centered());
 
-        let characteristic_block = Block::bordered()
-            .border_set(border::DOUBLE);
+        let characteristic_block = Block::bordered().border_set(border::DOUBLE);
 
         match self.view {
             View::Peripheral(view_state) => match view_state {
@@ -253,8 +249,8 @@ impl<'a> DisplayWidget<'a> {
                 ViewState::Idle => self.render_peripheral_names(left_area, buf, &peripheral_block),
                 _ => {}
             },
-            View::Characteristic(_) => {},
-            View::Error(_) => {},
+            View::Characteristic(_) => {}
+            View::Error(_) => {}
         }
 
         match self.view {
@@ -280,7 +276,7 @@ impl<'a> DisplayWidget<'a> {
                             characteristic,
                         )
                     {
-                        return Err(err)
+                        return Err(err);
                     }
                 }
                 ViewState::Notifying((notification_rx, notifications)) => {
@@ -295,7 +291,7 @@ impl<'a> DisplayWidget<'a> {
                                 notifications.update_empty_status(true);
                             }
                             Err(TryRecvError::Disconnected) => {
-                                return Err(String::from("Disconnected from Notification Stream"))
+                                return Err(String::from("Disconnected from Notification Stream"));
                             }
                         };
 
@@ -312,8 +308,8 @@ impl<'a> DisplayWidget<'a> {
                 }
                 _ => {}
             },
-            View::Peripheral(_) => {},
-            View::Error(_) => {},
+            View::Peripheral(_) => {}
+            View::Error(_) => {}
         }
 
         peripheral_block.render(left_area, buf);
@@ -520,10 +516,9 @@ impl<'a> Widget for DisplayWidget<'a> {
 
         self.render_lower_area(lower_area, buf);
         if let Err(error) = self.render_mid_area(mid_area, buf) {
-            let pop_up_error_widget = PopUpErrorWidget::new(&error);
+            let pop_up_error_widget = PopUpErrorWidget::new(error.clone());
             pop_up_error_widget.render(area, buf);
             *self.view = View::Error(error);
-
         } else {
             self.render_top_area(top_area, buf);
             outline_block.render(area, buf);
@@ -531,17 +526,17 @@ impl<'a> Widget for DisplayWidget<'a> {
     }
 }
 
-pub struct PopUpErrorWidget<'a> {
-    error: &'a str,
+pub struct PopUpErrorWidget {
+    error: String,
 }
 
-impl<'a> PopUpErrorWidget<'a> {
-    pub fn new(error: &'a str) -> Self {
+impl PopUpErrorWidget {
+    pub fn new(error: String) -> Self {
         Self { error }
     }
 }
 
-impl<'a> Widget for PopUpErrorWidget<'a> {
+impl Widget for PopUpErrorWidget {
     fn render(self, area: Rect, buf: &mut Buffer) {
         let instructions = Line::from(vec![" Exit ".into(), "<Esc> ".blue().bold()]);
 

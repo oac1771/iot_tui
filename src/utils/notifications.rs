@@ -22,12 +22,11 @@ impl Notifications {
     }
 }
 
-
 impl Default for Notifications {
     fn default() -> Self {
         Self {
             status: true,
-            notifications: Vec::new()
+            notifications: Vec::new(),
         }
     }
 }

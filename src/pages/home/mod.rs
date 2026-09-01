@@ -20,7 +20,6 @@ use state::State;
 pub struct HomePage {
     state: State,
     view: View,
-    error: Option<String>,
     peripherals_client: PeripheralsClient,
 }
 
@@ -28,7 +27,7 @@ pub struct HomePage {
 enum View {
     Peripheral(ViewState),
     Characteristic(ViewState),
-    Error(String)
+    Error(String),
 }
 
 #[derive(Clone)]
@@ -44,7 +43,7 @@ impl HomePage {
     pub fn new(peripherals_client: PeripheralsClient) -> Self {
         Self {
             state: State::default(),
-            error: None,
+            // error: None,
             view: View::Peripheral(ViewState::Idle),
             peripherals_client,
         }
@@ -124,27 +123,30 @@ impl Page for HomePage {
     }
 
     async fn handle_key_event(&mut self, key_event: &KeyEvent) -> Result<(), String> {
-        if key_event.kind == KeyEventKind::Press && self.error.is_none() {
-            match &self.view {
-                View::Peripheral(ViewState::Idle) => match key_event.code {
-                    KeyCode::Char('s') => {
-                        self.peripherals_client.get_peripherals().await?;
+        match &self.view {
+            View::Peripheral(view_state) => {
+                if let ViewState::Idle = view_state {
+                    match key_event.code {
+                        KeyCode::Char('s') => {
+                            self.peripherals_client.get_peripherals().await?;
+                        }
+                        KeyCode::Char('c') if !self.state.get_local_names().is_empty() => {
+                            let peripheral = self.state.get_indexed_peripheral();
+                            self.peripherals_client
+                                .get_characteristics(peripheral)
+                                .await?;
+                        }
+                        KeyCode::Up => self.state.update_peripheral_index(-1),
+                        KeyCode::Down => self.state.update_peripheral_index(1),
+                        KeyCode::Right if self.state.get_characteristics().is_some() => {
+                            self.view = View::Characteristic(ViewState::Idle)
+                        }
+                        _ => {}
                     }
-                    KeyCode::Char('c') if !self.state.get_local_names().is_empty() => {
-                        let peripheral = self.state.get_indexed_peripheral();
-                        self.peripherals_client
-                            .get_characteristics(peripheral)
-                            .await?;
-                    }
-                    KeyCode::Up => self.state.update_peripheral_index(-1),
-                    KeyCode::Down => self.state.update_peripheral_index(1),
-                    KeyCode::Right if self.state.get_characteristics().is_some() => {
-                        self.view = View::Characteristic(ViewState::Idle)
-                    }
-                    _ => {}
-                },
-
-                View::Characteristic(ViewState::Idle) => match key_event.code {
+                }
+            }
+            View::Characteristic(view_state) => match view_state {
+                ViewState::Idle => match key_event.code {
                     KeyCode::Up => self.state.update_characteristic_index(-1),
                     KeyCode::Down => self.state.update_characteristic_index(1),
                     KeyCode::Left => self.view = View::Peripheral(ViewState::Idle),
@@ -183,18 +185,18 @@ impl Page for HomePage {
                                         Notifications::default(),
                                     )))
                                 }
-                                Err(err) => self.error = Some(err),
+                                Err(err) => self.view = View::Error(err),
                             }
                         }
                     }
                     _ => {}
                 },
-                View::Characteristic(ViewState::Payload(_)) => {
+                ViewState::Payload(_) => {
                     if key_event.code == KeyCode::Esc {
                         self.view = View::Characteristic(ViewState::Idle)
                     }
                 }
-                View::Characteristic(ViewState::Editing) => match key_event.code {
+                ViewState::Editing => match key_event.code {
                     KeyCode::Esc => self.view = View::Characteristic(ViewState::Idle),
                     KeyCode::Char(to_insert) => self.enter_char(to_insert),
                     KeyCode::Backspace => self.delete_char(),
@@ -213,28 +215,25 @@ impl Page for HomePage {
                                         .write(peripheral.clone(), characteristic.id(), &data)
                                         .await?;
                                 }
-                                Err(err) => self.error = Some(err),
+                                Err(err) => self.view = View::Error(err),
                             }
                         }
                     }
                     _ => {}
                 },
-                View::Characteristic(ViewState::Notifying(_)) => {
+                ViewState::Notifying(_) => {
                     if key_event.code == KeyCode::Esc {
                         self.view = View::Characteristic(ViewState::Idle)
                     }
                 }
-                View::Error(err) => {
-                    self.error = Some(err.to_string());
-                }
+
                 _ => {}
+            },
+            View::Error(_) => {
+                if key_event.kind == KeyEventKind::Press && KeyCode::Esc == key_event.code {
+                    self.view = View::Peripheral(ViewState::Idle);
+                }
             }
-        } else if key_event.kind == KeyEventKind::Press
-            && self.error.is_some()
-            && let KeyCode::Esc = key_event.code
-        {
-            self.error = None;
-            self.view = View::Peripheral(ViewState::Idle);
         }
 
         Ok(())
@@ -270,14 +269,13 @@ impl Page for HomePage {
             }
             PeripheralResponse::ScanningMessageUpdate(message) => {
                 match &mut self.view {
-                    View::Characteristic(state) |  View::Peripheral(state) => {
+                    View::Characteristic(state) | View::Peripheral(state) => {
                         if let ViewState::Scanning((_, scanning_message)) = state {
                             *scanning_message = message
                         }
-                    },
+                    }
                     _ => {}
                 };
-
             }
             PeripheralResponse::ReadCharacteristicCallStarted => {
                 self.view = View::Characteristic(ViewState::Scanning((
@@ -299,20 +297,18 @@ impl Page for HomePage {
             PeripheralResponse::WriteCharacteristic => {
                 self.view = View::Characteristic(ViewState::Idle);
             }
-            PeripheralResponse::Error((response_type, err)) => {
-                match response_type {
-                    ResponseType::Peripheral => self.view = View::Peripheral(ViewState::Idle),
-                    ResponseType::Characteristic => self.view = View::Peripheral(ViewState::Idle),
-                }
-                self.error = Some(err);
-            }
+            PeripheralResponse::Error((response_type, err)) => match response_type {
+                ResponseType::Peripheral => self.view = View::Error(err),
+                ResponseType::Characteristic => self.view = View::Error(err),
+            },
         };
         Ok(())
     }
 
     fn generate_widget(&mut self) -> impl Widget {
-        if let Some(error) = &self.error {
-            HomeWidget::PopUpError(PopUpErrorWidget::new(error.as_ref()))
+        if let View::Error(error) = &mut self.view {
+            let err = error.clone();
+            HomeWidget::PopUpError(PopUpErrorWidget::new(err))
         } else {
             HomeWidget::Display(DisplayWidget::new(&self.state, &mut self.view))
         }
