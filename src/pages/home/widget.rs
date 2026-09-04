@@ -59,7 +59,9 @@ impl<'a> DisplayWidget<'a> {
                 ViewState::Idle => self.render_peripheral_names(area, buf, &peripheral_block),
                 _ => {}
             },
-            View::Characteristic(_) if !self.state.get_local_names().is_empty() => self.render_peripheral_names(area, buf, &peripheral_block),
+            View::Characteristic(_) if !self.state.get_local_names().is_empty() => {
+                self.render_peripheral_names(area, buf, &peripheral_block)
+            }
             View::Error(_) => {}
             _ => {}
         }
@@ -124,7 +126,9 @@ impl<'a> DisplayWidget<'a> {
                 _ => {}
             },
 
-            View::Peripheral(_) if self.state.get_characteristics().is_some() => self.render_characteristics(area, buf, &characteristic_block),
+            View::Peripheral(_) if self.state.get_characteristics().is_some() => {
+                self.render_characteristics(area, buf, &characteristic_block)
+            }
             View::Error(_) => {}
             _ => {}
         }
@@ -327,40 +331,6 @@ impl<'a> DisplayWidget<'a> {
         Ok(())
     }
 
-    fn render_lower_area(&mut self, area: Rect, buf: &mut Buffer) {
-        let layout = Layout::default()
-            .direction(Direction::Horizontal)
-            .flex(Flex::Center)
-            .constraints(vec![
-                Constraint::Percentage(33),
-                Constraint::Percentage(33),
-                Constraint::Percentage(33),
-            ]);
-
-        let [_, global_cmd_area, _] = layout.areas(area);
-
-        let mut cmds =
-            vec![Line::from(vec![" Quit: ".into(), " Ctrl + c ".blue().bold()]).centered()];
-
-        if self.state.get_characteristics().is_some() {
-            cmds.push(
-                Line::from(vec![
-                    " Navigate: ".into(),
-                    " <Up/Down/Right/Left> ".blue().bold(),
-                ])
-                .centered(),
-            );
-        } else {
-            cmds.push(
-                Line::from(vec![" Navigate: ".into(), " <Up/Down> ".blue().bold()]).centered(),
-            );
-        }
-
-        let global_cmds = Text::from(cmds);
-
-        Paragraph::new(global_cmds).render(global_cmd_area, buf);
-    }
-
     fn render_top_area(&mut self, area: Rect, buf: &mut Buffer) {
         let layout = Layout::default()
             .direction(Direction::Horizontal)
@@ -369,19 +339,22 @@ impl<'a> DisplayWidget<'a> {
 
         let [view_command_area, descriptor_area] = layout.areas(area);
 
-        // need to maybe update this? 
         match (&mut self.view, self.state.get_indexed_characteristic()) {
             (View::Peripheral(ViewState::Idle), _) => {
                 let mut cmds = Vec::new();
 
                 cmds.push(Line::from(vec![
-                    " Peripheral Scan: ".into(),
+                    " Scan Peripheral: ".into(),
                     " <s> ".blue().bold(),
                 ]));
 
                 if !self.state.get_local_names().is_empty() {
                     cmds.push(
-                        Line::from(vec![" Characteristic Scan: ".into(), " <c> ".blue().bold()])
+                        Line::from(vec![" Scan Characteristic: ".into(), " <c> ".blue().bold()])
+                            .centered(),
+                    );
+                    cmds.push(
+                        Line::from(vec![" Navigate: ".into(), " <Up/Down> ".blue().bold()])
                             .centered(),
                     );
                 }
@@ -430,6 +403,11 @@ impl<'a> DisplayWidget<'a> {
                     }
                 });
 
+                cmds.push(
+                    Line::from(vec![" Navigate: ".into(), " <Up/Down/Left> ".blue().bold()])
+                        .centered(),
+                );
+
                 let view_specific_cmds = Text::from(cmds);
 
                 Paragraph::new(view_specific_cmds.centered())
@@ -474,12 +452,8 @@ impl<'a> DisplayWidget<'a> {
                 ];
 
                 if let CharacteristicType::Unknown = characteristic.characteristic_type() {
-                    lines.push(Line::from(vec![
-                        "Unknown Characteristic".red().bold(),
-                    ]));
-                    lines.push(Line::from(vec![
-                        "cannot validate write data".red().bold(),
-                    ]));
+                    lines.push(Line::from(vec!["Unknown Characteristic".red().bold()]));
+                    lines.push(Line::from(vec!["cannot validate write data".red().bold()]));
                 }
 
                 let text = Text::from(lines);
@@ -519,10 +493,7 @@ impl<'a> Widget for DisplayWidget<'a> {
         let outline_block_inner_area = outline_block.inner(area);
         let layout = Layout::default()
             .direction(Direction::Vertical)
-            .constraints(vec![
-                Constraint::Percentage(10),
-                Constraint::Percentage(90),
-            ]);
+            .constraints(vec![Constraint::Percentage(10), Constraint::Percentage(90)]);
         let [top_area, mid_area] = layout.areas(outline_block_inner_area);
 
         // self.render_lower_area(lower_area, buf);
