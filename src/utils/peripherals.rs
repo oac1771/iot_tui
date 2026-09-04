@@ -453,17 +453,25 @@ impl KnownCharacteristic {
     }
 
     pub fn validate_write_data(&self, data: String) -> Result<Vec<u8>, String> {
-        for descriptor in self.descriptors() {
-            if let Ok(write_data) = descriptor.validate_write_data(&data) {
-                return Ok(write_data);
+
+        let descriptors = self.descriptors().collect::<Vec<&KnownDescriptor>>();
+
+        if !descriptors.is_empty() {
+            for descriptor in descriptors.iter() {
+                if let Ok(write_data) = descriptor.validate_write_data(&data) {
+                    return Ok(write_data);
+                }
             }
+
+            Err(format!(
+                "Could not validate write data: {:?}\nDescriptors: {:?}",
+                data,
+                descriptors
+            ))
+        } else {
+            Ok(data.into_bytes())
         }
 
-        Err(format!(
-            "Could not validate write data: {:?}\nDescriptor: {:?}",
-            data,
-            self.descriptors().collect::<Vec<&KnownDescriptor>>()
-        ))
     }
 }
 

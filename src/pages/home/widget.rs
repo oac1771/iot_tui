@@ -59,8 +59,9 @@ impl<'a> DisplayWidget<'a> {
                 ViewState::Idle => self.render_peripheral_names(area, buf, &peripheral_block),
                 _ => {}
             },
-            View::Characteristic(_) => {}
+            View::Characteristic(_) if !self.state.get_local_names().is_empty() => self.render_peripheral_names(area, buf, &peripheral_block),
             View::Error(_) => {}
+            _ => {}
         }
 
         peripheral_block.render(area, buf);
@@ -68,6 +69,7 @@ impl<'a> DisplayWidget<'a> {
 
     fn render_characteristic(&mut self, area: Rect, buf: &mut Buffer) -> Result<(), String> {
         let characteristic_block = Block::bordered().border_set(border::DOUBLE);
+
         match self.view {
             View::Characteristic(view_state) => match view_state {
                 ViewState::Scanning((spinner, scanning_message)) => {
@@ -121,8 +123,10 @@ impl<'a> DisplayWidget<'a> {
                 ViewState::Idle => self.render_characteristics(area, buf, &characteristic_block),
                 _ => {}
             },
-            View::Peripheral(_) => {}
+
+            View::Peripheral(_) if self.state.get_characteristics().is_some() => self.render_characteristics(area, buf, &characteristic_block),
             View::Error(_) => {}
+            _ => {}
         }
 
         characteristic_block.render(area, buf);
@@ -365,8 +369,9 @@ impl<'a> DisplayWidget<'a> {
 
         let [view_command_area, descriptor_area] = layout.areas(area);
 
+        // need to maybe update this? 
         match (&mut self.view, self.state.get_indexed_characteristic()) {
-            (View::Peripheral(ViewState::Idle), None) => {
+            (View::Peripheral(ViewState::Idle), _) => {
                 let mut cmds = Vec::new();
 
                 cmds.push(Line::from(vec![
@@ -471,6 +476,8 @@ impl<'a> DisplayWidget<'a> {
                 if let CharacteristicType::Unknown = characteristic.characteristic_type() {
                     lines.push(Line::from(vec![
                         "Unknown Characteristic".red().bold(),
+                    ]));
+                    lines.push(Line::from(vec![
                         "cannot validate write data".red().bold(),
                     ]));
                 }
@@ -514,12 +521,11 @@ impl<'a> Widget for DisplayWidget<'a> {
             .direction(Direction::Vertical)
             .constraints(vec![
                 Constraint::Percentage(10),
-                Constraint::Percentage(80),
-                Constraint::Percentage(10),
+                Constraint::Percentage(90),
             ]);
-        let [top_area, mid_area, lower_area] = layout.areas(outline_block_inner_area);
+        let [top_area, mid_area] = layout.areas(outline_block_inner_area);
 
-        self.render_lower_area(lower_area, buf);
+        // self.render_lower_area(lower_area, buf);
         if let Err(error) = self.render_mid_area(mid_area, buf) {
             let pop_up_error_widget = PopUpErrorWidget::new(error.clone());
             pop_up_error_widget.render(area, buf);

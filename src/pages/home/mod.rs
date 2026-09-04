@@ -43,7 +43,6 @@ impl HomePage {
     pub fn new(peripherals_client: PeripheralsClient) -> Self {
         Self {
             state: State::default(),
-            // error: None,
             view: View::Peripheral(ViewState::Idle),
             peripherals_client,
         }
