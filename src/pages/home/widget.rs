@@ -340,30 +340,58 @@ impl<'a> DisplayWidget<'a> {
         let [view_command_area, descriptor_area] = layout.areas(area);
 
         match (&mut self.view, self.state.get_indexed_characteristic()) {
-            (View::Peripheral(ViewState::Idle), _) => {
-                let mut cmds = Vec::new();
+            (View::Peripheral(view_state), characteristic) => match view_state {
+                ViewState::Idle if characteristic.is_none() => {
+                    let mut cmds = Vec::new();
 
-                cmds.push(Line::from(vec![
-                    " Scan Peripheral: ".into(),
-                    " <s> ".blue().bold(),
-                ]));
+                    cmds.push(Line::from(vec![
+                        " Scan Peripheral: ".into(),
+                        " <s> ".blue().bold(),
+                    ]));
+    
+                    if !self.state.get_local_names().is_empty() {
+                        cmds.push(
+                            Line::from(vec![" Scan Characteristic: ".into(), " <c> ".blue().bold()])
+                                .centered(),
+                        );
+                        cmds.push(
+                            Line::from(vec![" Navigate: ".into(), " <Up/Down> ".blue().bold()])
+                                .centered(),
+                        );
+                    }
+    
+                    let view_specific_cmds = Text::from(cmds);
+    
+                    Paragraph::new(view_specific_cmds.centered())
+                        .centered()
+                        .render(view_command_area, buf);
+                },
+                ViewState::Idle if characteristic.is_some() => {
+                    let mut cmds = Vec::new();
 
-                if !self.state.get_local_names().is_empty() {
-                    cmds.push(
-                        Line::from(vec![" Scan Characteristic: ".into(), " <c> ".blue().bold()])
-                            .centered(),
-                    );
-                    cmds.push(
-                        Line::from(vec![" Navigate: ".into(), " <Up/Down> ".blue().bold()])
-                            .centered(),
-                    );
-                }
-
-                let view_specific_cmds = Text::from(cmds);
-
-                Paragraph::new(view_specific_cmds.centered())
-                    .centered()
-                    .render(view_command_area, buf);
+                    cmds.push(Line::from(vec![
+                        " Scan Peripheral: ".into(),
+                        " <s> ".blue().bold(),
+                    ]));
+    
+                    if !self.state.get_local_names().is_empty() {
+                        cmds.push(
+                            Line::from(vec![" Scan Characteristic: ".into(), " <c> ".blue().bold()])
+                                .centered(),
+                        );
+                        cmds.push(
+                            Line::from(vec![" Navigate: ".into(), " <Up/Down/Right> ".blue().bold()])
+                                .centered(),
+                        );
+                    }
+    
+                    let view_specific_cmds = Text::from(cmds);
+    
+                    Paragraph::new(view_specific_cmds.centered())
+                        .centered()
+                        .render(view_command_area, buf);
+                },
+                _ => {}
             }
             (View::Characteristic(ViewState::Idle), Some(characteristic)) => {
                 let mut cmds = Vec::new();
