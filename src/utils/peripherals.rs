@@ -17,7 +17,10 @@ use services::{
 use std::pin::Pin;
 use tokio::{
     select,
-    sync::mpsc::{self, Receiver, Sender},
+    sync::{
+        mpsc::{self, Receiver, Sender},
+        watch,
+    },
     time::{Duration, sleep},
 };
 
@@ -53,7 +56,14 @@ pub enum PeripheralRequest {
     GetCharacteristics(PlatformPeripheral),
     Read((PlatformPeripheral, Uuid)),
     Write((PlatformPeripheral, Uuid, Vec<u8>)),
-    Notify((PlatformPeripheral, Uuid, channel::Sender<ValueNotification>)),
+    Notify(
+        (
+            PlatformPeripheral,
+            Uuid,
+            channel::Sender<ValueNotification>,
+            watch::Receiver<bool>,
+        ),
+    ),
 }
 
 #[derive(Debug)]
@@ -103,13 +113,14 @@ impl Peripherals {
                     Self::write_characteristic(central, tx, peripheral, characteristic_id, data)
                         .boxed()
                 }
-                PeripheralRequest::Notify((peripheral, characteristic_id, notify_tx)) => {
+                PeripheralRequest::Notify((peripheral, characteristic_id, notify_tx, kill_rx)) => {
                     Self::notify_characteristic(
                         central,
                         tx,
                         peripheral,
                         characteristic_id,
                         notify_tx,
+                        kill_rx,
                     )
                     .boxed()
                 }
@@ -283,6 +294,7 @@ impl Peripherals {
         peripheral: PlatformPeripheral,
         characteristic_id: Uuid,
         notify_tx: channel::Sender<ValueNotification>,
+        kill_rx: watch::Receiver<bool>,
     ) -> Result<(), String> {
         let result = async {
 
@@ -292,10 +304,18 @@ impl Peripherals {
             }?;
 
             tokio::pin!(notification_stream);
+            tokio::pin!(kill_rx);
 
-            while let Some(notification) = notification_stream.next().await {
-                if let Err(err) = notify_tx.send(notification) {
-                    return Err(err.to_string())
+            loop {
+                select! {
+                    Some(notification) = notification_stream.next() => {
+                        if let Err(err) = notify_tx.send(notification) {
+                            return Err(err.to_string());
+                        }
+                    }
+                    _ = kill_rx.changed() => {
+                        break;
+                    }
                 }
             }
 
@@ -357,13 +377,15 @@ impl PeripheralsClient {
         &self,
         peripheral: PlatformPeripheral,
         characteristic_id: Uuid,
-    ) -> Result<channel::Receiver<ValueNotification>, String> {
+    ) -> Result<(channel::Receiver<ValueNotification>, watch::Sender<bool>), String> {
         let (notify_tx, notify_rx) = bounded(100);
+        let (kill_tx, kill_rx) = watch::channel(false);
 
-        let request = PeripheralRequest::Notify((peripheral, characteristic_id, notify_tx));
+        let request =
+            PeripheralRequest::Notify((peripheral, characteristic_id, notify_tx, kill_rx));
         self.send_request(request).await?;
 
-        Ok(notify_rx)
+        Ok((notify_rx, kill_tx))
     }
 
     async fn send_request(&self, request: PeripheralRequest) -> Result<(), String> {

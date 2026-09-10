@@ -16,6 +16,7 @@ use crossterm::event::{KeyCode, KeyEvent, KeyEventKind};
 use iot_sdk::{CharPropFlags, Uuid, ValueNotification};
 use ratatui::widgets::Widget;
 use state::State;
+use tokio::sync::watch;
 
 pub struct HomePage {
     state: State,
@@ -36,7 +37,13 @@ enum ViewState {
     Scanning((Spinner, String)),
     Payload(Uuid),
     Editing,
-    Notifying((channel::Receiver<ValueNotification>, Notifications)),
+    Notifying(
+        (
+            channel::Receiver<ValueNotification>,
+            Notifications,
+            watch::Sender<bool>,
+        ),
+    ),
 }
 
 impl HomePage {
@@ -178,10 +185,11 @@ impl Page for HomePage {
                                 .await;
 
                             match result {
-                                Ok(notification_rx) => {
+                                Ok((notification_rx, kill_tx)) => {
                                     self.view = View::Characteristic(ViewState::Notifying((
                                         notification_rx,
                                         Notifications::default(),
+                                        kill_tx,
                                     )))
                                 }
                                 Err(err) => self.view = View::Error(err),
@@ -220,8 +228,9 @@ impl Page for HomePage {
                     }
                     _ => {}
                 },
-                ViewState::Notifying(_) => {
+                ViewState::Notifying((_, _, kill_tx)) => {
                     if key_event.code == KeyCode::Esc {
+                        kill_tx.send_replace(true);
                         self.view = View::Characteristic(ViewState::Idle)
                     }
                 }

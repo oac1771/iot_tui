@@ -98,7 +98,7 @@ impl<'a> DisplayWidget<'a> {
                         return Err(err);
                     }
                 }
-                ViewState::Notifying((notification_rx, notifications)) => {
+                ViewState::Notifying((notification_rx, notifications, _)) => {
                     if let Some(characteristic) = self.state.get_indexed_characteristic() {
                         match notification_rx.try_recv() {
                             Ok(value) => match characteristic.handle_notification(&value.value) {
