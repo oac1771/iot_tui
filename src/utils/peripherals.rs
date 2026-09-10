@@ -441,6 +441,21 @@ impl KnownCharacteristic {
         }
     }
 
+    pub fn handle_notification(&self, data: &[u8]) -> Result<String, String> {
+        if let Some(response) = self
+            .descriptors
+            .iter()
+            .filter_map(|d| d.handle_notification(data).ok())
+            .next()
+        {
+            Ok(response)
+        } else if let Ok(response) = String::from_utf8(data.to_vec()) {
+            Ok(response)
+        } else {
+            Err(format!("Unable to deserialize response from: {:?}", data))
+        }
+    }
+
     pub fn display_characteristic_properties(&self) -> String {
         match self.characteristic_type {
             CharacteristicType::Ping => format!("Ping: {}, {:?}", self.id(), self.properties()),
@@ -512,6 +527,23 @@ impl KnownDescriptor {
                 .map_err(|e| format!("{:?}", e)),
             KnownDescriptor::Storage(d) => d
                 .deserialize_read_response(data)
+                .map(|i| i.to_string())
+                .map_err(|e| format!("{:?}", e)),
+        }
+    }
+
+    pub fn handle_notification(&self, data: &[u8]) -> Result<String, String> {
+        match self {
+            KnownDescriptor::Ping(d) => d
+                .deserialize_notification_response(data)
+                .map(|i| i.to_string())
+                .map_err(|e| format!("{:?}", e)),
+            KnownDescriptor::Status(d) => d
+                .deserialize_notification_response(data)
+                .map(|i| i.to_string())
+                .map_err(|e| format!("{:?}", e)),
+            KnownDescriptor::Storage(d) => d
+                .deserialize_notification_response(data)
                 .map(|i| i.to_string())
                 .map_err(|e| format!("{:?}", e)),
         }

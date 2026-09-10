@@ -101,11 +101,16 @@ impl<'a> DisplayWidget<'a> {
                 ViewState::Notifying((notification_rx, notifications)) => {
                     if let Some(characteristic) = self.state.get_indexed_characteristic() {
                         match notification_rx.try_recv() {
-                            Ok(value) => {
-                                // convert characteristic to string value here
-                                notifications
-                                    .update_notifications(format!("Value: {:?}", value.value));
-                            }
+                            Ok(value) => match characteristic.handle_notification(&value.value) {
+                                Ok(notification) => {
+                                    notifications
+                                        .update_notifications(format!("{:?}", notification));
+                                }
+                                Err(_) => {
+                                    notifications
+                                        .update_notifications(format!("{:?}", value.value));
+                                }
+                            },
                             Err(TryRecvError::Empty) => {
                                 notifications.update_empty_status(true);
                             }
@@ -118,7 +123,7 @@ impl<'a> DisplayWidget<'a> {
                             area,
                             buf,
                             &characteristic_block,
-                            &notifications,
+                            notifications,
                         )
                     }
                 }
@@ -300,7 +305,7 @@ impl<'a> DisplayWidget<'a> {
 
         let lines = notifications
             .notifications()
-            .map(|n| Line::from(vec![format!(">>> {}", n).into()]))
+            .map(|n| Line::from(vec![n.into()]))
             .collect::<Vec<Line>>();
 
         let text = Text::from(lines);
@@ -348,24 +353,27 @@ impl<'a> DisplayWidget<'a> {
                         " Scan Peripheral: ".into(),
                         " <s> ".blue().bold(),
                     ]));
-    
+
                     if !self.state.get_local_names().is_empty() {
                         cmds.push(
-                            Line::from(vec![" Scan Characteristic: ".into(), " <c> ".blue().bold()])
-                                .centered(),
+                            Line::from(vec![
+                                " Scan Characteristic: ".into(),
+                                " <c> ".blue().bold(),
+                            ])
+                            .centered(),
                         );
                         cmds.push(
                             Line::from(vec![" Navigate: ".into(), " <Up/Down> ".blue().bold()])
                                 .centered(),
                         );
                     }
-    
+
                     let view_specific_cmds = Text::from(cmds);
-    
+
                     Paragraph::new(view_specific_cmds.centered())
                         .centered()
                         .render(view_command_area, buf);
-                },
+                }
                 ViewState::Idle if characteristic.is_some() => {
                     let mut cmds = Vec::new();
 
@@ -373,26 +381,32 @@ impl<'a> DisplayWidget<'a> {
                         " Scan Peripheral: ".into(),
                         " <s> ".blue().bold(),
                     ]));
-    
+
                     if !self.state.get_local_names().is_empty() {
                         cmds.push(
-                            Line::from(vec![" Scan Characteristic: ".into(), " <c> ".blue().bold()])
-                                .centered(),
+                            Line::from(vec![
+                                " Scan Characteristic: ".into(),
+                                " <c> ".blue().bold(),
+                            ])
+                            .centered(),
                         );
                         cmds.push(
-                            Line::from(vec![" Navigate: ".into(), " <Up/Down/Right> ".blue().bold()])
-                                .centered(),
+                            Line::from(vec![
+                                " Navigate: ".into(),
+                                " <Up/Down/Right> ".blue().bold(),
+                            ])
+                            .centered(),
                         );
                     }
-    
+
                     let view_specific_cmds = Text::from(cmds);
-    
+
                     Paragraph::new(view_specific_cmds.centered())
                         .centered()
                         .render(view_command_area, buf);
-                },
+                }
                 _ => {}
-            }
+            },
             (View::Characteristic(ViewState::Idle), Some(characteristic)) => {
                 let mut cmds = Vec::new();
 
