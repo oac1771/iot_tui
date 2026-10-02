@@ -6,7 +6,7 @@ use iot_sdk::{
     central::Central,
 };
 use services::{
-    Foo,
+    IotCharacteristic,
     health::{
         HEALTH_PING_CHAR_UUID, HEALTH_PING_DESCRIPTOR_UUID, HEALTH_STATUS_CHAR_UUID,
         HEALTH_STATUS_DESCRIPTOR_UUID, HealthServicePingDescriptor, HealthServiceStatusDescriptor,
@@ -588,14 +588,6 @@ impl TryFrom<Uuid> for KnownDescriptor {
     }
 }
 
-impl AsGatt for KnownDescriptor {
-    const MIN_SIZE: usize = core::mem::size_of::<usize>();
-    const MAX_SIZE: usize = core::mem::size_of::<usize>();
-
-    fn as_gatt(&self) -> &[u8] {
-        &[]
-    }
-}
 
 fn string_to_u8_bytes(input: &str) -> Result<[u8; 1], std::num::ParseIntError> {
     let value: u8 = input.parse()?;
