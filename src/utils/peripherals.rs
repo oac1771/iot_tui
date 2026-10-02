@@ -185,8 +185,75 @@ impl Peripherals {
                     .iter()
                     .filter_map(|d| KnownDescriptor::try_from(d.uuid).ok());
 
-                let known_characteristic = KnownCharacteristic::new(characteristic, descriptors);
-                known_characteristics.push(known_characteristic)
+                let known_characteristic =
+                    KnownCharacteristic::new(characteristic.clone(), descriptors);
+                known_characteristics.push(known_characteristic);
+
+                let foo = FooCharacteristicBuilder::new(characteristic.clone());
+
+                let read_handler = characteristic
+                    .properties
+                    .iter()
+                    .filter(|p| p.contains(CharPropFlags::READ))
+                    .map(|_| {
+                        if characteristic.uuid == HEALTH_STATUS_CHAR_UUID {
+                            ()
+                        } else if characteristic.uuid == STORAGE_DATA_CHAR_UUID {
+                            ()
+                        } else {
+                            ()
+                        };
+                    })
+                    .nth(0)
+                    .unwrap_or(());
+
+                let foo = foo.update_read_handler(Box::new(read_handler));
+
+                let write_handler = characteristic
+                    .properties
+                    .iter()
+                    .filter(|p| p.contains(CharPropFlags::WRITE))
+                    .map(|_| {
+                        if characteristic.uuid == STORAGE_DATA_CHAR_UUID {
+                            ()
+                        } else {
+                            ()
+                        };
+                    })
+                    .nth(0)
+                    .unwrap_or(());
+
+                let foo = foo.update_write_handler(Box::new(write_handler));
+
+                let notification_handler = characteristic
+                    .properties
+                    .iter()
+                    .filter(|p| p.contains(CharPropFlags::NOTIFY))
+                    .map(|_| {
+                        if characteristic.uuid == HEALTH_PING_CHAR_UUID {
+                            ()
+                        } else {
+                            ()
+                        };
+                    })
+                    .nth(0)
+                    .unwrap_or(());
+
+                let foo = foo.update_notification_handler(Box::new(notification_handler));
+
+                let display_handler = if characteristic.uuid == HEALTH_STATUS_CHAR_UUID {
+                    ()
+                } else if characteristic.uuid == HEALTH_PING_CHAR_UUID {
+                    ()
+                } else if characteristic.uuid == STORAGE_DATA_CHAR_UUID {
+                    ()
+                } else {
+                    ()
+                };
+
+                let foo = foo.update_display_handler(Box::new(display_handler));
+
+                let bar = foo.build();
             }
 
             let response = PeripheralResponse::GetCharacteristics(known_characteristics);
@@ -396,6 +463,131 @@ impl PeripheralsClient {
 }
 
 #[derive(Debug, Clone)]
+pub struct FooCharacteristicBuilder<RH, WH, NH, DH> {
+    characteristic: Characteristic,
+    read_handler: RH,
+    write_handler: WH,
+    notification_handler: NH,
+    display_handler: DH,
+}
+
+trait A {}
+impl A for () {}
+trait B {}
+impl B for () {}
+
+trait C {}
+impl C for () {}
+
+trait D {}
+impl D for () {}
+
+// #[derive(Debug, Clone)]
+pub struct FooCharacteristic {
+    characteristic: Characteristic,
+    read_handler: Box<dyn A>,
+    write_handler: Box<dyn B>,
+    notification_handler: Box<dyn C>,
+    display_handler: Box<dyn D>,
+}
+
+struct ReadHandlerNotSet;
+struct WriteHandlerNotSet;
+struct NotificationHandlerNotSet;
+struct DisplayHandlerNotSet;
+
+impl
+    FooCharacteristicBuilder<
+        ReadHandlerNotSet,
+        WriteHandlerNotSet,
+        NotificationHandlerNotSet,
+        DisplayHandlerNotSet,
+    >
+{
+    fn new(characteristic: Characteristic) -> Self {
+        Self {
+            characteristic,
+            read_handler: ReadHandlerNotSet,
+            write_handler: WriteHandlerNotSet,
+            notification_handler: NotificationHandlerNotSet,
+            display_handler: DisplayHandlerNotSet,
+        }
+    }
+}
+
+impl<WH, NH, DH> FooCharacteristicBuilder<ReadHandlerNotSet, WH, NH, DH> {
+    fn update_read_handler(
+        self,
+        read_handler: Box<dyn A>,
+    ) -> FooCharacteristicBuilder<Box<dyn A>, WH, NH, DH> {
+        FooCharacteristicBuilder {
+            characteristic: self.characteristic,
+            read_handler: read_handler,
+            write_handler: self.write_handler,
+            notification_handler: self.notification_handler,
+            display_handler: self.display_handler,
+        }
+    }
+}
+
+impl<RH, NH, DH> FooCharacteristicBuilder<RH, WriteHandlerNotSet, NH, DH> {
+    fn update_write_handler(
+        self,
+        write_handler: Box<dyn B>,
+    ) -> FooCharacteristicBuilder<RH, Box<dyn B>, NH, DH> {
+        FooCharacteristicBuilder {
+            characteristic: self.characteristic,
+            read_handler: self.read_handler,
+            write_handler: write_handler,
+            notification_handler: self.notification_handler,
+            display_handler: self.display_handler,
+        }
+    }
+}
+
+impl<RH, WH, DH> FooCharacteristicBuilder<RH, WH, NotificationHandlerNotSet, DH> {
+    fn update_notification_handler(
+        self,
+        notification_handler: Box<dyn C>,
+    ) -> FooCharacteristicBuilder<RH, WH, Box<dyn C>, DH> {
+        FooCharacteristicBuilder {
+            characteristic: self.characteristic,
+            read_handler: self.read_handler,
+            write_handler: self.write_handler,
+            notification_handler: notification_handler,
+            display_handler: self.display_handler,
+        }
+    }
+}
+
+impl<RH, WH, NH> FooCharacteristicBuilder<RH, WH, NH, DisplayHandlerNotSet> {
+    fn update_display_handler(
+        self,
+        display_handler: Box<dyn D>,
+    ) -> FooCharacteristicBuilder<RH, WH, NH, Box<dyn D>> {
+        FooCharacteristicBuilder {
+            characteristic: self.characteristic,
+            read_handler: self.read_handler,
+            write_handler: self.write_handler,
+            notification_handler: self.notification_handler,
+            display_handler: display_handler,
+        }
+    }
+}
+
+impl FooCharacteristicBuilder<Box<dyn A>, Box<dyn B>, Box<dyn C>, Box<dyn D>> {
+    fn build(self) -> FooCharacteristic {
+        FooCharacteristic {
+            characteristic: self.characteristic,
+            read_handler: self.read_handler,
+            write_handler: self.write_handler,
+            notification_handler: self.notification_handler,
+            display_handler: self.display_handler,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct KnownCharacteristic {
     characteristic: Characteristic,
     descriptors: Vec<KnownDescriptor>,
@@ -587,7 +779,6 @@ impl TryFrom<Uuid> for KnownDescriptor {
         }
     }
 }
-
 
 fn string_to_u8_bytes(input: &str) -> Result<[u8; 1], std::num::ParseIntError> {
     let value: u8 = input.parse()?;
