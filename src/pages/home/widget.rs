@@ -1,6 +1,8 @@
 use crate::{
     pages::home::{View, ViewState, state::State},
-    utils::{notifications::Notifications, peripherals::KnownCharacteristic, spinner::Spinner},
+    utils::{
+        known_characteristic::KnownCharacteristic, notifications::Notifications, spinner::Spinner,
+    },
 };
 use iot_sdk::CharPropFlags;
 use ratatui::{

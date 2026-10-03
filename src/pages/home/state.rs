@@ -1,7 +1,7 @@
 use iot_sdk::{Peripheral, PlatformPeripheral, Uuid};
 use std::collections::{BTreeMap, HashMap};
 
-use crate::utils::peripherals::KnownCharacteristic;
+use crate::utils::known_characteristic::KnownCharacteristic;
 
 #[derive(Debug)]
 pub struct State {
