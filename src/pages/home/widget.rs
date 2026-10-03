@@ -340,7 +340,7 @@ impl<'a> DisplayWidget<'a> {
             .flex(Flex::Center)
             .constraints(vec![Constraint::Percentage(33), Constraint::Percentage(66)]);
 
-        let [view_command_area, descriptor_area] = layout.areas(area);
+        let [view_command_area, right_area] = layout.areas(area);
 
         match (&mut self.view, self.state.get_indexed_characteristic()) {
             (View::Peripheral(view_state), characteristic) => match view_state {
@@ -488,7 +488,7 @@ impl<'a> DisplayWidget<'a> {
 
                 Paragraph::new(self.state.input.value.as_str())
                     .block(payload_block)
-                    .render(descriptor_area, buf);
+                    .render(right_area, buf);
             }
             _ => {}
         }
