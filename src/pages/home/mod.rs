@@ -215,7 +215,7 @@ impl Page for HomePage {
                         self.reset_cursor();
 
                         if let Some(characteristic) = self.state.get_indexed_characteristic() {
-                            match characteristic.validate_write_data(write_data) {
+                            match characteristic.serialize_write(write_data) {
                                 Ok(data) => {
                                     let peripheral = self.state.get_indexed_peripheral();
                                     self.peripherals_client

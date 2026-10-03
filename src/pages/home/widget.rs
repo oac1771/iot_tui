@@ -1,10 +1,6 @@
 use crate::{
     pages::home::{View, ViewState, state::State},
-    utils::{
-        notifications::Notifications,
-        peripherals::{CharacteristicType, KnownCharacteristic},
-        spinner::Spinner,
-    },
+    utils::{notifications::Notifications, peripherals::KnownCharacteristic, spinner::Spinner},
 };
 use iot_sdk::CharPropFlags;
 use ratatui::{
@@ -12,7 +8,7 @@ use ratatui::{
     layout::{Alignment, Constraint, Direction, Flex, Layout, Rect},
     style::{Style, Stylize},
     symbols::border,
-    text::{Line, Span, Text},
+    text::{Line, Text},
     widgets::{Block, Clear, List, ListItem, ListState, Paragraph, StatefulWidget, Widget, Wrap},
 };
 
@@ -410,25 +406,6 @@ impl<'a> DisplayWidget<'a> {
             (View::Characteristic(ViewState::Idle), Some(characteristic)) => {
                 let mut cmds = Vec::new();
 
-                let descriptors = Line::from(
-                    characteristic
-                        .descriptors()
-                        .filter_map(|d| {
-                            if !d.metadata().is_empty() {
-                                Some(Span::raw(format!("{:?}", d.metadata())))
-                            } else {
-                                None
-                            }
-                        })
-                        .collect::<Vec<Span>>(),
-                )
-                .centered();
-                let view_descriptors = Text::from(descriptors);
-
-                Paragraph::new(view_descriptors.centered())
-                    .centered()
-                    .render(descriptor_area, buf);
-
                 characteristic.properties().iter().for_each(|p| {
                     if p.contains(CharPropFlags::READ) {
                         cmds.push(
@@ -479,8 +456,8 @@ impl<'a> DisplayWidget<'a> {
                     .centered()
                     .render(view_command_area, buf);
             }
-            (View::Characteristic(ViewState::Editing), Some(characteristic)) => {
-                let mut lines = vec![
+            (View::Characteristic(ViewState::Editing), Some(_)) => {
+                let lines = vec![
                     Line::from(vec![
                         "Press ".into(),
                         "Esc".bold(),
@@ -492,11 +469,6 @@ impl<'a> DisplayWidget<'a> {
                         " to submit write request".into(),
                     ]),
                 ];
-
-                if let CharacteristicType::Unknown = characteristic.characteristic_type() {
-                    lines.push(Line::from(vec!["Unknown Characteristic".red().bold()]));
-                    lines.push(Line::from(vec!["cannot validate write data".red().bold()]));
-                }
 
                 let text = Text::from(lines);
                 Paragraph::new(text)

@@ -6,13 +6,10 @@ use iot_sdk::{
     central::Central,
 };
 use services::{
-    IotCharacteristic, NotificationHandler, NotificationResponse, ReadHandler, ReadResponse,
-    WriteHandler, WriteResponse,
-    health::{
-        HEALTH_PING_CHAR_UUID, HEALTH_PING_DESCRIPTOR_UUID, HEALTH_STATUS_CHAR_UUID,
-        HEALTH_STATUS_DESCRIPTOR_UUID, HealthServicePingDescriptor, HealthServiceStatusDescriptor,
-    },
-    storage::{STORAGE_DATA_CHAR_UUID, STORAGE_DATA_DESCRIPTOR_UUID, StorageServiceDataDescriptor},
+    NotificationHandler, NotificationResponse, ReadHandler, ReadResponse, WriteHandler,
+    WriteResponse,
+    health::{HEALTH_PING_CHAR_UUID, HEALTH_STATUS_CHAR_UUID},
+    storage::STORAGE_DATA_CHAR_UUID,
     trouble_host::types::gatt_traits::AsGatt,
 };
 use std::{fmt::Debug, pin::Pin};
@@ -180,26 +177,17 @@ impl Peripherals {
             let mut known_characteristics = Vec::new();
 
             for characteristic in peripheral.characteristics().into_iter() {
-                let c = characteristic.clone();
-                let descriptors = c
-                    .descriptors
-                    .iter()
-                    .filter_map(|d| KnownDescriptor::try_from(d.uuid).ok());
-
-                let known_characteristic =
-                    KnownCharacteristic::new(characteristic.clone(), descriptors);
-                known_characteristics.push(known_characteristic);
-
                 let read_handler = ReadHandler::new(characteristic.uuid);
                 let write_handler = WriteHandler::new(characteristic.uuid);
                 let notification_handler = NotificationHandler::new(characteristic.uuid);
 
-                let foo = FooCharacteristic::new(
+                let known_characteristic = KnownCharacteristic::new(
                     characteristic.clone(),
                     read_handler,
                     write_handler,
                     notification_handler,
                 );
+                known_characteristics.push(known_characteristic);
             }
 
             let response = PeripheralResponse::GetCharacteristics(known_characteristics);
@@ -409,21 +397,33 @@ impl PeripheralsClient {
 }
 
 #[derive(Debug, Clone)]
-pub struct FooCharacteristic {
+pub struct KnownCharacteristic {
+    display_name: String,
     characteristic: Characteristic,
     read_handler: ReadHandler,
     write_handler: WriteHandler,
     notification_handler: NotificationHandler,
 }
 
-impl FooCharacteristic {
+impl KnownCharacteristic {
     fn new(
         characteristic: Characteristic,
         read_handler: ReadHandler,
         write_handler: WriteHandler,
         notification_handler: NotificationHandler,
     ) -> Self {
+        let display_name = if characteristic.uuid == HEALTH_STATUS_CHAR_UUID {
+            String::from("Status")
+        } else if characteristic.uuid == HEALTH_PING_CHAR_UUID {
+            String::from("Ping")
+        } else if characteristic.uuid == STORAGE_DATA_CHAR_UUID {
+            String::from("Data")
+        } else {
+            String::from("")
+        };
+
         Self {
+            display_name,
             characteristic,
             read_handler,
             write_handler,
@@ -439,6 +439,15 @@ impl FooCharacteristic {
         self.characteristic.uuid
     }
 
+    pub fn display_characteristic_properties(&self) -> String {
+        format!(
+            "{} {}, {:?}",
+            self.display_name,
+            self.id(),
+            self.properties()
+        )
+    }
+
     pub fn handle_response(&self, data: &[u8]) -> Result<String, String> {
         match self.read_handler.deserialize(data) {
             ReadResponse::Other => String::from_utf8(data.to_vec()).map_err(|e| e.to_string()),
@@ -447,12 +456,12 @@ impl FooCharacteristic {
         }
     }
 
-    pub fn serialize_write(&self, data: String) -> Vec<u8> {
+    pub fn serialize_write(&self, data: String) -> Result<Vec<u8>, String> {
         let data = data.as_bytes();
 
         match self.write_handler.serialize(data) {
-            WriteResponse::Other => data.to_vec(),
-            WriteResponse::Data(data) => data.as_gatt().to_vec(),
+            WriteResponse::Other => Ok(data.to_vec()),
+            WriteResponse::Data(data) => Ok(data.as_gatt().to_vec()),
         }
     }
 
@@ -464,202 +473,4 @@ impl FooCharacteristic {
             NotificationResponse::Ping(pong) => Ok(format!("{}", pong)),
         }
     }
-}
-
-#[derive(Debug, Clone)]
-pub struct KnownCharacteristic {
-    characteristic: Characteristic,
-    descriptors: Vec<KnownDescriptor>,
-    characteristic_type: CharacteristicType,
-}
-
-#[derive(Debug, Clone)]
-pub enum CharacteristicType {
-    Ping,
-    Status,
-    Storage,
-    Unknown,
-}
-
-impl KnownCharacteristic {
-    pub fn new(
-        characteristic: Characteristic,
-        descriptors: impl Iterator<Item = KnownDescriptor>,
-    ) -> Self {
-        let characteristic_type = if characteristic.uuid == HEALTH_STATUS_CHAR_UUID {
-            CharacteristicType::Status
-        } else if characteristic.uuid == HEALTH_PING_CHAR_UUID {
-            CharacteristicType::Ping
-        } else if characteristic.uuid == STORAGE_DATA_CHAR_UUID {
-            CharacteristicType::Storage
-        } else {
-            CharacteristicType::Unknown
-        };
-
-        Self {
-            characteristic,
-            descriptors: descriptors.collect(),
-            characteristic_type,
-        }
-    }
-
-    pub fn characteristic_type(&self) -> &CharacteristicType {
-        &self.characteristic_type
-    }
-
-    pub fn descriptors(&self) -> impl Iterator<Item = &KnownDescriptor> {
-        self.descriptors.iter()
-    }
-
-    pub fn properties(&self) -> &CharPropFlags {
-        &self.characteristic.properties
-    }
-
-    pub fn id(&self) -> Uuid {
-        self.characteristic.uuid
-    }
-
-    pub fn handle_response(&self, data: &[u8]) -> Result<String, String> {
-        if let Some(response) = self
-            .descriptors
-            .iter()
-            .filter_map(|d| d.handle_response(data).ok())
-            .next()
-        {
-            Ok(response)
-        } else if let Ok(response) = String::from_utf8(data.to_vec()) {
-            Ok(response)
-        } else {
-            Err(format!("Unable to deserialize response from: {:?}", data))
-        }
-    }
-
-    pub fn handle_notification(&self, data: &[u8]) -> Result<String, String> {
-        if let Some(response) = self
-            .descriptors
-            .iter()
-            .filter_map(|d| d.handle_notification(data).ok())
-            .next()
-        {
-            Ok(response)
-        } else if let Ok(response) = String::from_utf8(data.to_vec()) {
-            Ok(response)
-        } else {
-            Err(format!("Unable to deserialize response from: {:?}", data))
-        }
-    }
-
-    pub fn display_characteristic_properties(&self) -> String {
-        match self.characteristic_type {
-            CharacteristicType::Ping => format!("Ping: {}, {:?}", self.id(), self.properties()),
-            CharacteristicType::Status => format!("Status: {}, {:?}", self.id(), self.properties()),
-            CharacteristicType::Storage => {
-                format!("Storage: {}, {:?}", self.id(), self.properties())
-            }
-            CharacteristicType::Unknown => format!("ID: {}, {:?}", self.id(), self.properties()),
-        }
-    }
-
-    pub fn validate_write_data(&self, data: String) -> Result<Vec<u8>, String> {
-        let descriptors = self.descriptors().collect::<Vec<&KnownDescriptor>>();
-
-        if !descriptors.is_empty() {
-            for descriptor in descriptors.iter() {
-                if let Ok(write_data) = descriptor.validate_write_data(&data) {
-                    return Ok(write_data);
-                }
-            }
-
-            Err(format!(
-                "Could not validate write data: {:?}\nDescriptors: {:?}",
-                data, descriptors
-            ))
-        } else {
-            Ok(data.into_bytes())
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
-pub enum KnownDescriptor {
-    Status(HealthServiceStatusDescriptor),
-    Ping(HealthServicePingDescriptor),
-    Storage(StorageServiceDataDescriptor),
-}
-
-impl KnownDescriptor {
-    pub fn metadata(&self) -> String {
-        match self {
-            KnownDescriptor::Ping(d) => format!("Ping: {:?}", d.id()),
-            KnownDescriptor::Status(d) => format!("Status: {:?}", d.id()),
-            KnownDescriptor::Storage(d) => format!("Storage: {:?}", d.id()),
-        }
-    }
-
-    fn validate_write_data(&self, data: &str) -> Result<Vec<u8>, String> {
-        match self {
-            KnownDescriptor::Ping(d) => Ok(d.serialize_write_data(()).as_gatt().to_vec()),
-            KnownDescriptor::Status(d) => Ok(d.serialize_write_data(()).as_gatt().to_vec()),
-            KnownDescriptor::Storage(d) => {
-                let write_data = string_to_u8_bytes(data).map_err(|e| e.to_string())?;
-
-                Ok(d.serialize_write_data(write_data).as_gatt().to_vec())
-            }
-        }
-    }
-
-    pub fn handle_response(&self, data: &[u8]) -> Result<String, String> {
-        match self {
-            KnownDescriptor::Ping(d) => d
-                .deserialize_read_response(data)
-                .map(|i| i.to_string())
-                .map_err(|e| format!("{:?}", e)),
-            KnownDescriptor::Status(d) => d
-                .deserialize_read_response(data)
-                .map(|i| i.to_string())
-                .map_err(|e| format!("{:?}", e)),
-            KnownDescriptor::Storage(d) => d
-                .deserialize_read_response(data)
-                .map(|i| i.to_string())
-                .map_err(|e| format!("{:?}", e)),
-        }
-    }
-
-    pub fn handle_notification(&self, data: &[u8]) -> Result<String, String> {
-        match self {
-            KnownDescriptor::Ping(d) => d
-                .deserialize_notification_response(data)
-                .map(|i| i.to_string())
-                .map_err(|e| format!("{:?}", e)),
-            KnownDescriptor::Status(d) => d
-                .deserialize_notification_response(data)
-                .map(|i| i.to_string())
-                .map_err(|e| format!("{:?}", e)),
-            KnownDescriptor::Storage(d) => d
-                .deserialize_notification_response(data)
-                .map(|i| i.to_string())
-                .map_err(|e| format!("{:?}", e)),
-        }
-    }
-}
-
-impl TryFrom<Uuid> for KnownDescriptor {
-    type Error = String;
-
-    fn try_from(value: Uuid) -> Result<Self, Self::Error> {
-        if value == STORAGE_DATA_DESCRIPTOR_UUID {
-            Ok(Self::Storage(StorageServiceDataDescriptor))
-        } else if value == HEALTH_PING_DESCRIPTOR_UUID {
-            Ok(Self::Ping(HealthServicePingDescriptor))
-        } else if value == HEALTH_STATUS_DESCRIPTOR_UUID {
-            Ok(Self::Status(HealthServiceStatusDescriptor))
-        } else {
-            Err(String::from("Not known descriptor"))
-        }
-    }
-}
-
-fn string_to_u8_bytes(input: &str) -> Result<[u8; 1], std::num::ParseIntError> {
-    let value: u8 = input.parse()?;
-    Ok(value.to_le_bytes())
 }
