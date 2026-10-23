@@ -74,6 +74,24 @@ impl KnownCharacteristic {
     pub fn serialize_write(&self, data: String) -> Result<Vec<u8>, String> {
         let data = data.as_bytes();
 
+        use serde::{Serialize, Deserialize};
+        use postcard::{from_bytes, to_vec};
+        
+        #[derive(Serialize, Deserialize, Debug, Eq, PartialEq)]
+        struct RefStruct<'a> {
+            bytes: &'a [u8],
+            str_s: &'a str,
+        }
+
+        let message = "hElLo";
+        let bytes = [0x01, 0x10, 0x02, 0x20];
+        let foo = RefStruct {
+            bytes: &bytes,
+            str_s: message,
+        };
+
+        let output: Vec<u8> = to_vec::<_, 128>(&foo).unwrap().into_iter().collect();
+
         match self
             .write_handler
             .serialize(data)
